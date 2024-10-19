@@ -44,7 +44,7 @@ class AiFriend : JavaPlugin(), Listener {
 
         // Add a timer that calls a new function periodically
         val timer = Timer()
-        timer.schedule(0L, 60000L) { // 60,000 milliseconds = 60 seconds
+        timer.schedule(0L, 10000L) { // 60,000 milliseconds = 60 seconds
             performOpenAICall()}
     }
 
@@ -53,7 +53,7 @@ class AiFriend : JavaPlugin(), Listener {
         val openaiApiKey = config.getString("openai_api_key")
 
         for (message in playerMessages) {
-            Bukkit.broadcastMessage("Hráč poslal: $message, OpenAI klíč: $openaiApiKey");
+            Bukkit.broadcastMessage(message);
 
         }
         val size = playerMessages.size
@@ -67,7 +67,14 @@ class AiFriend : JavaPlugin(), Listener {
 
         // Získání zprávy z chatu
         val playerMessage = event.message
-        playerMessages.add(playerMessage)
+
+        // jméno hráče
+        val playerName = event.player.name
+
+        playerMessages.add("- $playerName: $playerMessage")
+
+
+        //performOpenAICall()
 
         //Bukkit.broadcastMessage(openaiChatbotName+"Hráč poslal: $playerMessage, OpenAI klíč: $openaiApiKey");
         // Bukkit.broadcastMessage("Hráč poslal: $playerMessage, OpenAI klíč: $openaiApiKey");
