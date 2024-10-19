@@ -83,5 +83,12 @@
             <artifactId>kotlin-stdlib-jdk8</artifactId>
             <version>${kotlin.version}</version>
         </dependency>
+        <!-- OpenAI API -->
+        <dependency>
+            <groupId>com.theokanning.openai-gpt3-java</groupId>
+            <artifactId>service</artifactId>
+            <version>0.18.2</version>  <!-- or use a specific commit id -->
+            <scope>compile</scope>
+        </dependency>
     </dependencies>
 </project>
