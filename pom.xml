@@ -86,7 +86,7 @@
         <!-- OpenAI API -->
         <dependency>
             <groupId>com.theokanning.openai-gpt3-java</groupId>
-            <artifactId>client</artifactId>
+            <artifactId>service</artifactId>
             <version>0.18.2</version>
         </dependency>
     </dependencies>
