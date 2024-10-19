@@ -11,7 +11,11 @@ import org.bukkit.plugin.java.JavaPlugin
 class AiFriend : JavaPlugin(), Listener {
 
     private var config: FileConfiguration = getConfig()
-
+    private val openaiApiKey = config.getString("openai_api_key");
+    private val openaiChatbotName = config.getString("openai_chatbot_name");
+    private val openaiPrefferedLanguage = config.getString("preffered_language");
+    private val openaiCustomDatabase = config.getString("customDatabase");
+    
     override fun onEnable() {
         // Plugin startup logic
         logger.info("AI Friend is here for you!")
@@ -37,10 +41,7 @@ class AiFriend : JavaPlugin(), Listener {
     @EventHandler
     fun onPlayerChat(event: AsyncPlayerChatEvent) {
         // API klíč pro OpenAI
-        val openaiApiKey = config.getString("openai_api_key");
-        val openaiChatbotName = config.getString("openai_chatbot_name");
-        val openaiPrefferedLanguage = config.getString("preffered_language");
-        val openaiCustomDatabase = config.getString("customDatabase");
+
 
         // Získání zprávy z chatu
         val playerMessage = event.message
