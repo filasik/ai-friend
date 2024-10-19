@@ -1,0 +1,8 @@
+name: ai-friend
+version: '1.0-SNAPSHOT'
+main: me.skerik.aiFriend.AiFriend
+api-version: '1.21'
+prefix: AI Friend
+authors: [ Filasik, Patr1xCZ ]
+description: AI Friend that helps you with player interactions.
+website: https://hcraft.cz

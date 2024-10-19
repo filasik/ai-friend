@@ -6,6 +6,7 @@ class AiFriend : JavaPlugin() {
 
     override fun onEnable() {
         // Plugin startup logic
+        logger.info("AI Friend is here for you!")
     }
 
     override fun onDisable() {
