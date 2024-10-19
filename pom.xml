@@ -86,9 +86,8 @@
         <!-- OpenAI API -->
         <dependency>
             <groupId>com.theokanning.openai-gpt3-java</groupId>
-            <artifactId>service</artifactId>
-            <version>0.18.2</version>  <!-- or use a specific commit id -->
-            <scope>compile</scope>
+            <artifactId>client</artifactId>
+            <version>0.18.2</version>
         </dependency>
     </dependencies>
 </project>
