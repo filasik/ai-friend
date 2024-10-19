@@ -54,7 +54,7 @@ class AiFriend : JavaPlugin(), Listener {
 
         // Add a timer that calls a new function periodically
         val timer = Timer()
-        timer.schedule(0L, 10000L) { // 60,000 milliseconds = 60 seconds
+        timer.schedule(0L, 60000L) { // 60,000 milliseconds = 60 seconds
             if (Bukkit.getOnlinePlayers().isNotEmpty() && playerMessages.isNotEmpty()) {
                 performOpenAICall()
             }
