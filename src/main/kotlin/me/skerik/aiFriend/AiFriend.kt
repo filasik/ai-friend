@@ -50,19 +50,16 @@ class AiFriend : JavaPlugin(), Listener {
 
     private fun performOpenAICall()
     {
-        val openaiApiKey = config.getString("openai_api_key")
-
         for (message in playerMessages) {
             Bukkit.broadcastMessage(message);
-
         }
         val size = playerMessages.size
         Bukkit.broadcastMessage(" pocet zprav: $size");
+        playerMessages.clear()
     }
 
     @EventHandler
     fun onPlayerChat(event: AsyncPlayerChatEvent) {
-        // API klíč pro OpenAI
 
 
         // Získání zprávy z chatu
