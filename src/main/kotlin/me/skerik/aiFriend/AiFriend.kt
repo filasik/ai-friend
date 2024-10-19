@@ -16,12 +16,20 @@ class AiFriend : JavaPlugin(), Listener {
     private val playerMessages: MutableList<String> = mutableListOf()
 
 
+    private val openaiApiKey = config.getString("openai_api_key");
+    private val openaiChatbotName = config.getString("openai_chatbot_name");
+    private val openaiPrefferedLanguage = config.getString("preffered_language");
+    private val openaiCustomDatabase = config.getString("customDatabase");
+
     override fun onEnable() {
         // Plugin startup logic
         logger.info("AI Friend is here for you!")
 
         // Vytvoření konfiguračního souboru
         config.addDefault("openai_api_key", "your_openai_api_key_here");
+        config.addDefault("openai_chatbot_name", "AiFriend");
+        config.addDefault("preffered_language", "English");
+        config.addDefault("customDatabase", " #if you have some specific answers to some questions, you can add them here");
         config.options().copyDefaults(true);
         saveConfig();
 
@@ -55,12 +63,13 @@ class AiFriend : JavaPlugin(), Listener {
     @EventHandler
     fun onPlayerChat(event: AsyncPlayerChatEvent) {
         // API klíč pro OpenAI
-        val openaiApiKey = config.getString("openai_api_key")
+
 
         // Získání zprávy z chatu
         val playerMessage = event.message
         playerMessages.add(playerMessage)
 
+        //Bukkit.broadcastMessage(openaiChatbotName+"Hráč poslal: $playerMessage, OpenAI klíč: $openaiApiKey");
         // Bukkit.broadcastMessage("Hráč poslal: $playerMessage, OpenAI klíč: $openaiApiKey");
     }
 
