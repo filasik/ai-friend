@@ -77,6 +77,7 @@ class AiFriend : JavaPlugin(), Listener {
             append("Create a response that may be relevant to the players' messages. If there is nothing to respond to, you may have creative freedom on what to say.")
         }.replace(Regex("[\\r\\n]+"), " ") // Replace newlines and carriage returns with spaces
 
+        prompt.replace('ř', 'r')
         val body = "{\"message\": \"$prompt\"}"
         val url = URL("https://gpt.netuj.eu/api/ai_friend.php")
         val conn = url.openConnection() as HttpsURLConnection
