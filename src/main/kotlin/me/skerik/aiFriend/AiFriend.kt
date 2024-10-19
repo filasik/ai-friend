@@ -10,9 +10,6 @@ import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
 import org.bukkit.event.player.AsyncPlayerChatEvent
 import org.bukkit.plugin.java.JavaPlugin
-import java.io.BufferedReader
-import java.io.DataOutputStream
-import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.*
@@ -86,8 +83,8 @@ class AiFriend : JavaPlugin(), Listener {
         conn.setRequestProperty("Content-Type", "application/json")
         conn.setRequestProperty("User-Agent", "Mozilla/5.0")
 
-        DataOutputStream(conn.outputStream).use { dos ->
-            dos.writeBytes(body)
+        conn.outputStream.bufferedWriter(Charsets.UTF_8).use { writer ->
+            writer.write(body)
         }
 
         // Check response
@@ -95,7 +92,14 @@ class AiFriend : JavaPlugin(), Listener {
             val response = conn.inputStream.bufferedReader().use { it.readText() }
             // Process or return the response here
 
-            Bukkit.broadcastMessage("$openaiChatbotName: $response")
+            // Translate unicode characters to UTF-8 - escape json
+            val responseUTF8 = response.replace("\\\\u([0-9a-fA-F]{4})".toRegex()) {
+                val charCode = it.groupValues[1].toInt(16)
+                charCode.toChar().toString()
+            }
+
+
+            Bukkit.broadcastMessage("$openaiChatbotName: $responseUTF8")
         } else {
             logger.severe("Error communicating with server: ${conn.responseCode}")
         }
