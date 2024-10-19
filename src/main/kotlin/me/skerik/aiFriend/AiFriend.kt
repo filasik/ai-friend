@@ -10,13 +10,14 @@ import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
 import org.bukkit.event.player.AsyncPlayerChatEvent
 import org.bukkit.plugin.java.JavaPlugin
-import java.time.Duration
+import java.io.BufferedReader
+import java.io.DataOutputStream
+import java.io.InputStreamReader
+import java.net.HttpURLConnection
+import java.net.URL
 import java.util.*
+import javax.net.ssl.HttpsURLConnection
 import kotlin.concurrent.schedule
-
-import com.theokanning.openai.*
-import com.theokanning.openai.completion.CompletionRequest
-import com.theokanning.openai.service.OpenAiService
 
 
 class AiFriend : JavaPlugin(), Listener {
@@ -38,7 +39,10 @@ class AiFriend : JavaPlugin(), Listener {
         config.addDefault("openai_api_key", "your_openai_api_key_here");
         config.addDefault("openai_chatbot_name", "AiFriend");
         config.addDefault("preffered_language", "English");
-        config.addDefault("customDatabase", " #if you have some specific answers to some questions, you can add them here");
+        config.addDefault(
+            "customDatabase",
+            " #if you have some specific answers to some questions, you can add them here"
+        );
         config.options().copyDefaults(true);
         saveConfig();
 
@@ -55,53 +59,50 @@ class AiFriend : JavaPlugin(), Listener {
         val timer = Timer()
         timer.schedule(0L, 10000L) { // 60,000 milliseconds = 60 seconds
             if (Bukkit.getOnlinePlayers().isNotEmpty() && playerMessages.isNotEmpty()) {
-                performOpenAICall()}
+                performOpenAICall()
+            }
         }
 
     }
 
-    private fun performOpenAICall()
-    {
-        for (message in playerMessages) {
-            Bukkit.broadcastMessage(message);
+    private fun performOpenAICall() {
+        // Prepare the prompt based on player messages
+        val prompt = buildString {
+            append("You are a chatbot on a Minecraft server, your name is: $openaiChatbotName ")
+            append("you will always speak in this language: $openaiPrefferedLanguage. ")
+            append("These are the messages players have sent since your last call in the format [Player name]: [Player message]: ")
+            for (message in playerMessages) {
+                append(message).append(" ")
+            }
+            append("Create a response that may be relevant to the players' messages. If there is nothing to respond to, you may have creative freedom on what to say.")
+        }.replace(Regex("[\\r\\n]+"), " ") // Replace newlines and carriage returns with spaces
+
+        val body = "{\"message\": \"$prompt\"}"
+        val url = URL("https://gpt.netuj.eu/api/ai_friend.php")
+        val conn = url.openConnection() as HttpsURLConnection
+        conn.requestMethod = "POST"
+        conn.doOutput = true
+        conn.setRequestProperty("Content-Type", "application/json")
+        conn.setRequestProperty("User-Agent", "Mozilla/5.0")
+
+        DataOutputStream(conn.outputStream).use { dos ->
+            dos.writeBytes(body)
         }
 
-        var prompt = "You are a chatbot on a minecraft server, your name is: $openaiChatbotName " +
-                "\nyou will always speak in this language: $openaiPrefferedLanguage" +
-                "\nthese are the messages players have sent since your last call in the format [Player name]: [Player message] \n"
-        for (message in playerMessages) {
-            prompt += message +"\n"
+        // Check response
+        if (conn.responseCode == HttpURLConnection.HTTP_OK) {
+            val response = conn.inputStream.bufferedReader().use { it.readText() }
+            // Process or return the response here
+
+            Bukkit.broadcastMessage("$openaiChatbotName: $response")
+        } else {
+            logger.severe("Error communicating with server: ${conn.responseCode}")
         }
-        prompt += "Create a response that may be relevant to the players messages if there is nothing to respond to you may have creative freedom on what to say"
-
-        try {
-            // Initialize the OpenAI service with the API key
-            val openaiService = OpenAiService(openaiApiKey)
-
-            // Create a completion request with the generated prompt
-            val completionRequest = CompletionRequest.builder()
-                .model("gpt-3.5-turbo")  // Choose the OpenAI model you prefer (e.g., GPT-4)
-                .prompt(prompt)
-                .maxTokens(30)  // Adjust max tokens to control the length of the response
-                .temperature(0.7)  // Adjust temperature to control randomness/creativity
-                .build()
-
-            // Send the request and get the response
-            val response = openaiService.createCompletion(completionRequest)
-
-            // Retrieve the generated message from OpenAI
-            val openAiResponse = response.choices[0].text.trim()
-
-            // Broadcast the response to all players in the game
-            Bukkit.broadcastMessage("$openaiChatbotName: $openAiResponse")
-        } catch (e: Exception) {
-            // Log any errors that occur during the API call
-            logger.severe("Error communicating with OpenAI: ${e.message}")
-        }
-
 
         playerMessages.clear()
     }
+
+
 
     @EventHandler
     fun onPlayerChat(event: AsyncPlayerChatEvent) {
@@ -114,7 +115,7 @@ class AiFriend : JavaPlugin(), Listener {
         val playerName = event.player.name
 
         playerMessages.add("- $playerName: $playerMessage")
-        
+
 
         //performOpenAICall()
 

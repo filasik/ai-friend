@@ -41,6 +41,14 @@
             <goals>
               <goal>shade</goal>
             </goals>
+            <configuration>
+              <relocations>
+                <relocation>
+                  <pattern>com.theokanning.openai</pattern>
+                  <shadedPattern>me.skerik.aiFriend.shaded.com.theokanning.openai</shadedPattern>
+                </relocation>
+              </relocations>
+            </configuration>
           </execution>
         </executions>
       </plugin>
