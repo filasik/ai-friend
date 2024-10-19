@@ -1,6 +1,11 @@
 package me.skerik.aiFriend
 
 import org.bukkit.Bukkit
+import org.bukkit.ChatColor
+import org.bukkit.command.Command
+import org.bukkit.command.CommandSender
+import org.bukkit.command.CommandExecutor
+import org.bukkit.entity.Player
 import org.bukkit.configuration.file.FileConfiguration
 import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
@@ -69,12 +74,28 @@ class AiFriend : JavaPlugin(), Listener {
         val playerName = event.player.name
 
         playerMessages.add("- $playerName: $playerMessage")
-
+        
 
         //performOpenAICall()
 
         //Bukkit.broadcastMessage(openaiChatbotName+"Hráč poslal: $playerMessage, OpenAI klíč: $openaiApiKey");
         // Bukkit.broadcastMessage("Hráč poslal: $playerMessage, OpenAI klíč: $openaiApiKey");
+    }
+
+    override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<String>): Boolean {
+        if (command.name.equals("aifriend", ignoreCase = true)) {
+            if (sender is Player && sender.isOp) {
+                sender.sendMessage("${ChatColor.GREEN}AI Friend Configuration:")
+                sender.sendMessage("${ChatColor.YELLOW}API Key: ${ChatColor.WHITE}$openaiApiKey")
+                sender.sendMessage("${ChatColor.YELLOW}Chatbot Name: ${ChatColor.WHITE}$openaiChatbotName")
+                sender.sendMessage("${ChatColor.YELLOW}Preferred Language: ${ChatColor.WHITE}$openaiPrefferedLanguage")
+                sender.sendMessage("${ChatColor.YELLOW}Custom Database: ${ChatColor.WHITE}$openaiCustomDatabase")
+            } else {
+                sender.sendMessage("${ChatColor.RED}You must be a server operator to use this command.")
+            }
+            return true
+        }
+        return false
     }
 
     override fun onDisable() {

@@ -6,3 +6,7 @@ prefix: AI Friend
 authors: [ Filasik, Patr1xCZ ]
 description: AI Friend that helps you with player interactions.
 website: https://hcraft.cz
+commands:
+  aifriend:
+    description: Shows AI Friend configuration information
+    usage: /aifriend
