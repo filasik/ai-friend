@@ -17,7 +17,7 @@ class UpdateChecker : Listener {
 
     private var isAvailable: Boolean = false
 
-    private val currentVersion = "1.0.0"
+    private val currentVersion = "1.1.0"
 
     init {
         check()

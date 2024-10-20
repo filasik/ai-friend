@@ -100,7 +100,8 @@ class AiFriend : JavaPlugin(), Listener {
     private fun performOpenAICall() {
         // Prepare the prompt based on player messages
         val prompt = buildString {
-            append("You are a chatbot on a Minecraft server, your name is: $openaiChatbotName ")
+            append("this is the most important thing: If it looks like players are no longer interested in talking to AI in their language $openaiPrefferedLanguage (people are angry about AI, telling something like stop AI etc.) respond only with STOP MESSAGING (we will catch that and stop you for a while).")
+            append("You are a chatbot on a Minecraft server, your name is: $openaiChatbotName .")
             append("you will always and only speak in this language: $openaiPrefferedLanguage. ")
             append("These are the messages players have sent since your last call in the format [Player name]: [Player message]: ")
             for (message in playerMessages) {
@@ -143,10 +144,22 @@ class AiFriend : JavaPlugin(), Listener {
 
             val responseUTF8Clean = responseUTF8.substring(1, responseUTF8.length - 1) // remove " from start and end
 
-            Bukkit.broadcastMessage("$openaiChatbotName: $responseUTF8Clean")
-            playerMessages.clear()
-            lastMessage = responseUTF8Clean // save last message for context
 
+            //if there is STOP MESSAGING in the response, add a delay like 30 minutes before sending another API request
+            if (responseUTF8Clean.contains("STOP MESSAGING")) {
+                enabled = false
+                logger.info("AI Friend is going to sleep for 30 minutes. Players are not interested in talking to me.")
+                val timer = Timer()
+                timer.schedule(1800000) {
+                    enabled = true
+                    logger.info("AI Friend is awake. Let's talk!")
+                }
+            } else {
+                Bukkit.broadcastMessage("$openaiChatbotName: $responseUTF8Clean")
+                lastMessage = responseUTF8Clean // save last message for context
+            }
+
+            playerMessages.clear()
         } else {
             logger.severe("Error communicating with server: ${conn.responseCode}")
         }
