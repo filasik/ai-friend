@@ -24,7 +24,7 @@ enabled: true  # Enable or disable the AI Friend plugin.
 timer_interval: 60  # Interval in seconds for calling the OpenAI API.
 openai_chatbot_name: "AiFriend"  # Name of the AI chatbot.
 preffered_language: "English"  # Preferred language for the chatbot.
-customDatabase: ""  # Custom database for the chatbot to use.# ai-friend
+personalization: ""  # Custom database - optional. (your custom message for the AI chatbot)
  ```
 
 ## Installation
