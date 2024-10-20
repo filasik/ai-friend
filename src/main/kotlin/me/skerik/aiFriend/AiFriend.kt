@@ -16,14 +16,14 @@ import java.util.*
 import javax.net.ssl.HttpsURLConnection
 import kotlin.concurrent.schedule
 
-
 class AiFriend : JavaPlugin(), Listener {
-
     private var config: FileConfiguration = getConfig()
     private val playerMessages: MutableList<String> = mutableListOf()
-
+    private var lastMessage: String = ""
 
     private val openaiApiKey = config.getString("openai_api_key");
+    private var enabled = config.getBoolean("enabled");
+    private val timerInterval = config.getInt("timer_interval");
     private val openaiChatbotName = config.getString("openai_chatbot_name");
     private val openaiPrefferedLanguage = config.getString("preffered_language");
     private val openaiCustomDatabase = config.getString("customDatabase");
@@ -34,48 +34,66 @@ class AiFriend : JavaPlugin(), Listener {
 
         // Vytvoření konfiguračního souboru
         config.addDefault("openai_api_key", "your_openai_api_key_here");
+        config.addDefault("enabled", true);
+        config.addDefault("timer_interval", 60);
         config.addDefault("openai_chatbot_name", "AiFriend");
         config.addDefault("preffered_language", "English");
         config.addDefault(
             "customDatabase",
-            " #if you have some specific answers to some questions, you can add them here"
+            ""
         );
         config.options().copyDefaults(true);
         saveConfig();
 
         // Log - pokud není nastaven API klíč
-        if (config.getString("openai_api_key") == "your_openai_api_key_here") {
-
+        if (openaiApiKey == "your_openai_api_key_here") {
             logger.warning("API Key not set. Please set your OpenAI API key in the config file.")
         }
 
-        // Registrace event listeneru pro chat
-        Bukkit.getPluginManager().registerEvents(this, this)
-
-        // Add a timer that calls a new function periodically
-        val timer = Timer()
-        timer.schedule(0L, 60000L) { // 60,000 milliseconds = 60 seconds
-            if (Bukkit.getOnlinePlayers().isNotEmpty() && playerMessages.isNotEmpty()) {
-                performOpenAICall()
-            }
+        if(openaiCustomDatabase != null) {
+            logger.info("Custom database: $openaiCustomDatabase")
         }
 
+        if(openaiApiKey != "your_openai_api_key_here") {
+            Bukkit.getPluginManager().registerEvents(this, this)
+
+            // Ensure the timer interval is positive
+            if (timerInterval > 0) {
+                // Timer val is in seconds so we need to convert it to milliseconds
+                val timerIntervalMillis = timerInterval * 1000L
+
+                // Add a timer that calls the OpenAI API every timerIntervalMillis
+                val timer = Timer()
+                timer.schedule(0L, timerIntervalMillis) {
+                    if (Bukkit.getOnlinePlayers().isNotEmpty() && playerMessages.isNotEmpty() && enabled) {
+                        performOpenAICall()
+                    }
+                }
+            } else {
+                logger.warning("Timer interval must be positive. Current value: $timerInterval")
+            }
+        }
     }
 
     private fun performOpenAICall() {
         // Prepare the prompt based on player messages
         val prompt = buildString {
             append("You are a chatbot on a Minecraft server, your name is: $openaiChatbotName ")
-            append("you will always speak in this language: $openaiPrefferedLanguage. ")
+            append("you will always and only speak in this language: $openaiPrefferedLanguage. ")
             append("These are the messages players have sent since your last call in the format [Player name]: [Player message]: ")
             for (message in playerMessages) {
                 append(message).append(" ")
             }
+            append("Your last message was (for context): $lastMessage. ")
             append("Create a response that may be relevant to the players' messages. If there is nothing to respond to, you may have creative freedom on what to say.")
+            append("Also use $openaiCustomDatabase and if there is answer in it, use it.")
+            append("Your answers should be short, like maximally 200 characters.")
+            append("Use only emojis like :), :D, :P, :O, :|, :/ and xD.")
+            append("In chat history you see your own last message for context. Its from $openaiChatbotName. Don't use your name in response.")
         }.replace(Regex("[\\r\\n]+"), " ") // Replace newlines and carriage returns with spaces
 
 
-        val body = "{\"message\": \"$prompt\"}"
+        val body = "{\"message\": \"$prompt\", \"api_key\": \"$openaiApiKey\"}"
         val url = URL("https://gpt.netuj.eu/api/ai_friend.php")
         val conn = url.openConnection() as HttpsURLConnection
         conn.requestMethod = "POST"
@@ -90,37 +108,28 @@ class AiFriend : JavaPlugin(), Listener {
         // Check response
         if (conn.responseCode == HttpURLConnection.HTTP_OK) {
             val response = conn.inputStream.bufferedReader().use { it.readText() }
-            // Process or return the response here
 
-            // Translate unicode characters to UTF-8 - escape json
-            val responseUTF8 = response.replace("\\\\u([0-9a-fA-F]{4})".toRegex()) {
+             val responseUTF8 = response.replace("\\\\u([0-9a-fA-F]{4})".toRegex()) { // Translate unicode characters to UTF-8 - escape json
                 val charCode = it.groupValues[1].toInt(16)
                 charCode.toChar().toString()
             }
 
+            val responseUTF8Clean = responseUTF8.substring(1, responseUTF8.length - 1) // remove " from start and end
 
-            Bukkit.broadcastMessage("$openaiChatbotName: $responseUTF8")
+            Bukkit.broadcastMessage("$openaiChatbotName: $responseUTF8Clean")
+            playerMessages.clear()
+            lastMessage = responseUTF8Clean // save last message for context
+
         } else {
             logger.severe("Error communicating with server: ${conn.responseCode}")
         }
-
-        playerMessages.clear()
     }
-
-
 
     @EventHandler
     fun onPlayerChat(event: AsyncPlayerChatEvent) {
-
-
-        // Získání zprávy z chatu
         val playerMessage = event.message
-
-        // jméno hráče
         val playerName = event.player.name
-
         playerMessages.add("- $playerName: $playerMessage")
-
     }
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<String>): Boolean {
@@ -140,6 +149,6 @@ class AiFriend : JavaPlugin(), Listener {
     }
 
     override fun onDisable() {
-        // Plugin shutdown logic
+        logger.info("AI Friend is going to sleep.")
     }
 }
