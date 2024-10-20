@@ -13,23 +13,32 @@ import javax.net.ssl.HttpsURLConnection
 class UpdateChecker : Listener {
 
     private val url = "https://api.spigotmc.org/legacy/update.php?resource="
-    private val id = "resourceId"
+    private val id = "120292"
 
     private var isAvailable: Boolean = false
+
+    private val currentVersion = "1.0.0"
 
     init {
         check()
     }
 
-    fun isAvailable(): Boolean {
+    private fun isAvailable(): Boolean {
         return isAvailable
     }
 
     @EventHandler
     fun on(event: PlayerJoinEvent) {
-        if (event.player.isOp && isAvailable) {
+        if (event.player.isOp && isAvailable()) {
+
+            val connection = URL("$url$id").openConnection() as HttpsURLConnection
+            connection.requestMethod = "GET"
+            val raw = BufferedReader(InputStreamReader(connection.inputStream)).readLine()
+
             event.player.sendMessage("-------------------------------------")
             event.player.sendMessage("Update available for AiFriend! Download it at https://www.spigotmc.org/resources/$id/")
+            event.player.sendMessage("Your version: $currentVersion")
+            event.player.sendMessage("New version: $raw")
             event.player.sendMessage("-------------------------------------")
         }
     }
@@ -41,7 +50,7 @@ class UpdateChecker : Listener {
     private fun checkUpdate(): Boolean {
         Bukkit.getLogger().info("AI Friend is checking for updates...")
         return try {
-            val localVersion = AiFriend::class.java.`package`.implementationVersion
+            var localVersion = currentVersion
             val connection = URL("$url$id").openConnection() as HttpsURLConnection
             connection.requestMethod = "GET"
             val raw = BufferedReader(InputStreamReader(connection.inputStream)).readLine()
@@ -51,6 +60,10 @@ class UpdateChecker : Listener {
             } else {
                 raw
             }
+
+            //trim - from the local version string
+            localVersion = localVersion.split("-")[0].trim()
+
 
             !localVersion.equals(remoteVersion, ignoreCase = true)
         } catch (e: IOException) {

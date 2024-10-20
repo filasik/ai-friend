@@ -109,7 +109,7 @@ class AiFriend : JavaPlugin(), Listener {
             append("Your last message was (for context): $lastMessage. ")
             append("Create a response that may be relevant to the players' messages. If there is nothing to respond to, you may have creative freedom on what to say.")
             append("Your answers should be short, like maximally 200 characters.")
-            append("Use only emojis like :), :D, :P, :O, :|, :/ and xD.")
+            append("Use only emojis like :), :D, :P, :O, :|, :/ and xD. Never use java line breaks or new lines.")
             append("In chat history you see your own last message for context. Its from $openaiChatbotName. Don't use your name in response.")
         }.replace(Regex("[\\r\\n]+"), " ") // Replace newlines and carriage returns with spaces
 
