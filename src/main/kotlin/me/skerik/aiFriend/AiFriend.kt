@@ -28,6 +28,7 @@ class AiFriend : JavaPlugin(), Listener {
     private val openaiGptVersion = config.getString("gpt_version");
     private val openaiChatbotName = config.getString("openai_chatbot_name");
     private val openaiPrefferedLanguage = config.getString("preffered_language");
+    private val openaiPersonalization = config.getString("personalization");
 
     override fun onEnable() {
         // Plugin startup logic
@@ -40,6 +41,7 @@ class AiFriend : JavaPlugin(), Listener {
         config.addDefault("gpt_version", "gpt-4o-mini");
         config.addDefault("openai_chatbot_name", "AiFriend");
         config.addDefault("preffered_language", "English");
+        config.addDefault("personalization", "")
         config.options().copyDefaults(true);
         saveConfig();
 
@@ -64,6 +66,9 @@ class AiFriend : JavaPlugin(), Listener {
     
             # Preferred language for the chatbot responses
             preffered_language: ${config.getString("preffered_language")}
+            
+            # Personalization for the chatbot responses
+            personalization: ${config.getString("personalization")}
             """.trimIndent()
 
             configFile.writeText(configContent)
@@ -112,6 +117,9 @@ class AiFriend : JavaPlugin(), Listener {
             append("Your answers should be short, like maximally 200 characters.")
             append("Use only emojis like :), :D, :P, :O, :|, :/ and xD. Never use java line breaks or new lines.")
             append("In chat history you see your own last message for context. Its from $openaiChatbotName. Don't use your name in response.")
+            if(openaiPersonalization != "") {
+                append("This is what server admin wants you to know: $openaiPersonalization")
+            }
         }.replace(Regex("[\\r\\n]+"), " ") // Replace newlines and carriage returns with spaces
 
 
