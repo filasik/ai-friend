@@ -10,6 +10,7 @@ import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
 import org.bukkit.event.player.AsyncPlayerChatEvent
 import org.bukkit.plugin.java.JavaPlugin
+import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.*
@@ -24,9 +25,9 @@ class AiFriend : JavaPlugin(), Listener {
     private val openaiApiKey = config.getString("openai_api_key");
     private var enabled = config.getBoolean("enabled");
     private val timerInterval = config.getInt("timer_interval");
+    private val openaiGptVersion = config.getString("gpt_version");
     private val openaiChatbotName = config.getString("openai_chatbot_name");
     private val openaiPrefferedLanguage = config.getString("preffered_language");
-    private val openaiCustomDatabase = config.getString("customDatabase");
 
     override fun onEnable() {
         // Plugin startup logic
@@ -36,22 +37,43 @@ class AiFriend : JavaPlugin(), Listener {
         config.addDefault("openai_api_key", "your_openai_api_key_here");
         config.addDefault("enabled", true);
         config.addDefault("timer_interval", 60);
+        config.addDefault("gpt_version", "gpt-4o-mini");
         config.addDefault("openai_chatbot_name", "AiFriend");
         config.addDefault("preffered_language", "English");
-        config.addDefault(
-            "customDatabase",
-            ""
-        );
         config.options().copyDefaults(true);
         saveConfig();
+
+        // Add comments to the config.yml file
+        val configFile = File(dataFolder, "config.yml")
+        if (configFile.exists()) {
+            val configContent = """
+            # OpenAI API key for accessing the OpenAI services
+            openai_api_key: ${config.getString("openai_api_key")}
+    
+            # Enable or disable the AI Friend plugin
+            enabled: ${config.getBoolean("enabled")}
+    
+            # Interval in seconds for the timer to call the OpenAI API
+            timer_interval: ${config.getInt("timer_interval")}
+    
+            # Version of the GPT model to use
+            gpt_version: ${config.getString("gpt_version")}
+    
+            # Name of the OpenAI chatbot
+            openai_chatbot_name: ${config.getString("openai_chatbot_name")}
+    
+            # Preferred language for the chatbot responses
+            preffered_language: ${config.getString("preffered_language")}
+            """.trimIndent()
+
+            configFile.writeText(configContent)
+        }
+
+        Bukkit.getPluginManager().registerEvents(UpdateChecker(), this)
 
         // Log - pokud není nastaven API klíč
         if (openaiApiKey == "your_openai_api_key_here") {
             logger.warning("API Key not set. Please set your OpenAI API key in the config file.")
-        }
-
-        if(openaiCustomDatabase != null) {
-            logger.info("Custom database: $openaiCustomDatabase")
         }
 
         if(openaiApiKey != "your_openai_api_key_here") {
@@ -86,14 +108,19 @@ class AiFriend : JavaPlugin(), Listener {
             }
             append("Your last message was (for context): $lastMessage. ")
             append("Create a response that may be relevant to the players' messages. If there is nothing to respond to, you may have creative freedom on what to say.")
-            append("Also use $openaiCustomDatabase and if there is answer in it, use it.")
             append("Your answers should be short, like maximally 200 characters.")
             append("Use only emojis like :), :D, :P, :O, :|, :/ and xD.")
             append("In chat history you see your own last message for context. Its from $openaiChatbotName. Don't use your name in response.")
         }.replace(Regex("[\\r\\n]+"), " ") // Replace newlines and carriage returns with spaces
 
 
-        val body = "{\"message\": \"$prompt\", \"api_key\": \"$openaiApiKey\"}"
+        val jsonBody = """
+        {
+            "message": "$prompt",
+            "api_key": "$openaiApiKey",
+            "gpt_version": "$openaiGptVersion"
+        }
+        """.trimIndent()
         val url = URL("https://gpt.netuj.eu/api/ai_friend.php")
         val conn = url.openConnection() as HttpsURLConnection
         conn.requestMethod = "POST"
@@ -102,7 +129,7 @@ class AiFriend : JavaPlugin(), Listener {
         conn.setRequestProperty("User-Agent", "Mozilla/5.0")
 
         conn.outputStream.bufferedWriter(Charsets.UTF_8).use { writer ->
-            writer.write(body)
+            writer.write(jsonBody)
         }
 
         // Check response
@@ -139,7 +166,6 @@ class AiFriend : JavaPlugin(), Listener {
                 sender.sendMessage("${ChatColor.YELLOW}API Key: ${ChatColor.WHITE}$openaiApiKey")
                 sender.sendMessage("${ChatColor.YELLOW}Chatbot Name: ${ChatColor.WHITE}$openaiChatbotName")
                 sender.sendMessage("${ChatColor.YELLOW}Preferred Language: ${ChatColor.WHITE}$openaiPrefferedLanguage")
-                sender.sendMessage("${ChatColor.YELLOW}Custom Database: ${ChatColor.WHITE}$openaiCustomDatabase")
             } else {
                 sender.sendMessage("${ChatColor.RED}You must be a server operator to use this command.")
             }
