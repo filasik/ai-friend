@@ -9,6 +9,8 @@ AI Friend is a Minecraft plugin that enhances player interactions by providing a
 - **Scheduled API Calls**: Periodically calls the OpenAI API to generate responses.
 - **Command Support**: Provides a command to display the current configuration.
 - **Player angryness recognition**: The AI chatbot can recognize if the player is angry and respond accordingly. Stopping the responses (API calls) for 30 minutes.
+- **Personalization**: You can add your own custom message to the AI chatbot.
+- **Free Trial**: The plugin offers the "trial" API key to use for 3 days.
 
 ## Commands
 

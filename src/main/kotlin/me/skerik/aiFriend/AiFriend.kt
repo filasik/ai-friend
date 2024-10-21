@@ -12,6 +12,7 @@ import org.bukkit.event.player.AsyncPlayerChatEvent
 import org.bukkit.plugin.java.JavaPlugin
 import java.io.File
 import java.net.HttpURLConnection
+import java.net.InetAddress
 import java.net.URL
 import java.util.*
 import javax.net.ssl.HttpsURLConnection
@@ -21,6 +22,7 @@ class AiFriend : JavaPlugin(), Listener {
     private var config: FileConfiguration = getConfig()
     private val playerMessages: MutableList<String> = mutableListOf()
     private var lastMessage: String = ""
+    private var serverIP: String = "unknown"
 
     private val openaiApiKey = config.getString("openai_api_key");
     private var enabled = config.getBoolean("enabled");
@@ -39,7 +41,7 @@ class AiFriend : JavaPlugin(), Listener {
         config.addDefault("enabled", true);
         config.addDefault("timer_interval", 60);
         config.addDefault("gpt_version", "gpt-4o-mini");
-        config.addDefault("openai_chatbot_name", "AiFriend");
+        config.addDefault("chatbot_name", "AI Friend");
         config.addDefault("preffered_language", "English");
         config.addDefault("personalization", "")
         config.options().copyDefaults(true);
@@ -50,29 +52,40 @@ class AiFriend : JavaPlugin(), Listener {
         if (configFile.exists()) {
             val configContent = """
             # OpenAI API key for accessing the OpenAI services
+            # You can get an API key at https://platform.openai.com/signup
+            # Trial API key is available for free, but has limited functionality
+            # To use trial API key, set the value to "trial" (3 days of free trial)
             openai_api_key: ${config.getString("openai_api_key")}
     
             # Enable or disable the AI Friend plugin
             enabled: ${config.getBoolean("enabled")}
     
             # Interval in seconds for the timer to call the OpenAI API
+            # Must be positive, determines how often the AI Friend will respond to player messages
             timer_interval: ${config.getInt("timer_interval")}
     
-            # Version of the GPT model to use
+            # Version of the GPT model to use gpt-4o-mini, gpt-4o, ...
+            # Changes doesn't apply if you use trial API key.
             gpt_version: ${config.getString("gpt_version")}
     
             # Name of the OpenAI chatbot
-            openai_chatbot_name: ${config.getString("openai_chatbot_name")}
+            openai_chatbot_name: ${config.getString("chatbot_name")}
     
-            # Preferred language for the chatbot responses
+            # Preferred language for the chatbot responses - English, German, Czech, ...
             preffered_language: ${config.getString("preffered_language")}
             
             # Personalization for the chatbot responses
+            # You can add some personalization for the chatbot responses
+            # For example: Our website is https://www.example.com and sometimes tell a joke.
+            # Can be empty
             personalization: ${config.getString("personalization")}
             """.trimIndent()
 
             configFile.writeText(configContent)
         }
+
+        //get server IP address and save it to var
+        serverIP = InetAddress.getLocalHost().toString();
 
         Bukkit.getPluginManager().registerEvents(UpdateChecker(), this)
 
@@ -123,11 +136,13 @@ class AiFriend : JavaPlugin(), Listener {
         }.replace(Regex("[\\r\\n]+"), " ") // Replace newlines and carriage returns with spaces
 
 
+
         val jsonBody = """
         {
             "message": "$prompt",
             "api_key": "$openaiApiKey",
-            "gpt_version": "$openaiGptVersion"
+            "gpt_version": "$openaiGptVersion",
+            "server_ip": "$serverIP"
         }
         """.trimIndent()
         val url = URL("https://gpt.netuj.eu/api/ai_friend.php")
@@ -170,6 +185,23 @@ class AiFriend : JavaPlugin(), Listener {
             playerMessages.clear()
         } else {
             logger.severe("Error communicating with server: ${conn.responseCode}")
+
+            // Define ANSI color codes
+            val ANSI_RED = "\u001B[31m"
+            val ANSI_RESET = "\u001B[0m"
+
+            // if error is 401 (Unauthorized) send more info to the log
+            if (conn.responseCode == 401) {
+                logger.severe("${ANSI_RED}Unauthorized. Please check your OpenAI API key.${ANSI_RESET}")
+                if (openaiApiKey == "your_openai_api_key_here") {
+                    logger.severe("${ANSI_RED}API Key not set. Please set your OpenAI API key in the config file.${ANSI_RESET}")
+                }
+                if (openaiApiKey == "trial") {
+                    logger.severe("${ANSI_RED}Your trial API key expired. Please use a paid API key to access the full functionality.${ANSI_RESET}")
+                    logger.severe("${ANSI_RED}You can get an API key at https://platform.openai.com/signup${ANSI_RESET}")
+                    logger.severe("${ANSI_RED}If you want to use our solution, contact developers on Discord.${ANSI_RESET}")
+                }
+            }
         }
     }
 
@@ -187,6 +219,10 @@ class AiFriend : JavaPlugin(), Listener {
                 sender.sendMessage("${ChatColor.YELLOW}API Key: ${ChatColor.WHITE}$openaiApiKey")
                 sender.sendMessage("${ChatColor.YELLOW}Chatbot Name: ${ChatColor.WHITE}$openaiChatbotName")
                 sender.sendMessage("${ChatColor.YELLOW}Preferred Language: ${ChatColor.WHITE}$openaiPrefferedLanguage")
+                sender.sendMessage("${ChatColor.YELLOW}Personalization: ${ChatColor.WHITE}$openaiPersonalization")
+                sender.sendMessage("${ChatColor.YELLOW}Timer Interval: ${ChatColor.WHITE}$timerInterval seconds")
+                sender.sendMessage("${ChatColor.YELLOW}GPT Version: ${ChatColor.WHITE}$openaiGptVersion")
+                sender.sendMessage("${ChatColor.YELLOW}Enabled: ${ChatColor.WHITE}$enabled")
             } else {
                 sender.sendMessage("${ChatColor.RED}You must be a server operator to use this command.")
             }
