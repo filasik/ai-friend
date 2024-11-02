@@ -9,6 +9,7 @@ import java.io.BufferedReader
 import java.io.IOException
 import java.io.InputStreamReader
 import java.net.URL
+import java.util.*
 import javax.net.ssl.HttpsURLConnection
 
 class UpdateChecker : Listener {
@@ -18,7 +19,12 @@ class UpdateChecker : Listener {
 
     private var isAvailable: Boolean = false
 
-    private val currentVersion = "1.3.0"
+    private val currentVersion = "1.4.0"
+
+    // Define ANSI color codes
+    private val ANSI_GREEN = "\u001B[32m"
+    private val ANSI_YELLOW = "\u001B[33m"
+    private val ANSI_RESET = "\u001B[0m"
 
     init {
         check()
@@ -49,7 +55,7 @@ class UpdateChecker : Listener {
     }
 
     private fun checkUpdate(): Boolean {
-        Bukkit.getLogger().info("AI Friend is checking for updates...")
+        Bukkit.getLogger().info("${ANSI_GREEN}AI Friend is checking for updates...${ANSI_RESET}")
         return try {
             var localVersion = currentVersion
             val connection = URL("$url$id").openConnection() as HttpsURLConnection
@@ -67,7 +73,12 @@ class UpdateChecker : Listener {
 
             //if local != remote return true
             if (localVersion != remoteVersion) {
-                Bukkit.getLogger().info("AI Friend is outdated! New version available: $remoteVersion")
+                //logger without colors
+                Bukkit.getLogger().info("${ANSI_YELLOW}-------------------------------------${ANSI_RESET}")
+                Bukkit.getLogger().info("${ANSI_GREEN}Update available for AI Friend! Download it at ${ANSI_YELLOW}https://www.spigotmc.org/resources/$id/${ANSI_RESET}")
+                Bukkit.getLogger().info("${ANSI_GREEN}Your version: ${ANSI_YELLOW}$currentVersion${ANSI_RESET}")
+                Bukkit.getLogger().info("${ANSI_GREEN}New version: ${ANSI_YELLOW}$raw${ANSI_RESET}")
+                Bukkit.getLogger().info("${ANSI_YELLOW}-------------------------------------${ANSI_RESET}")
                 return true
             }
             false

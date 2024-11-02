@@ -15,6 +15,7 @@ AI Friend is a Minecraft plugin that enhances player interactions by providing a
 ## Commands
 
 - **/aifriend**: Shows AI Friend configuration information. Only accessible by server operators.
+- **/aifriendreload**: Reloads the AI Friend configuration file. Only accessible by server operators.
 
 ## Configuration (`config.yml`)
 

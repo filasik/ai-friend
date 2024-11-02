@@ -24,21 +24,31 @@ class AiFriend : JavaPlugin(), Listener {
     private var lastMessage: String = ""
     private var serverIP: String = "unknown"
 
-    private val openaiApiKey = config.getString("openai_api_key");
+    private var timer: Timer? = null
+
+
+    private val ANSI_GREEN = "\u001B[32m"
+    private val ANSI_YELLOW = "\u001B[33m"
+    private val ANSI_RESET = "\u001B[0m"
+    private val ANSI_RED = "\u001B[31m"
+
+    private var openaiApiKey = config.getString("openai_api_key");
     private var enabled = config.getBoolean("enabled");
-    private val timerInterval = config.getInt("timer_interval");
-    private val openaiGptVersion = config.getString("gpt_version");
-    private val openaiChatbotName = config.getString("openai_chatbot_name");
-    private val openaiPrefferedLanguage = config.getString("preffered_language");
-    private val openaiPersonalization = config.getString("personalization");
+    private var playerDisinterest = config.getBoolean("player_dissinterest");
+    private var timerInterval = config.getInt("timer_interval");
+    private var openaiGptVersion = config.getString("gpt_version");
+    private var openaiChatbotName = config.getString("chatbot_name");
+    private var openaiPrefferedLanguage = config.getString("preffered_language");
+    private var openaiPersonalization = config.getString("personalization");
 
     override fun onEnable() {
         // Plugin startup logic
-        logger.info("AI Friend is here for you!")
+        logger.info("${ANSI_GREEN}AI Friend is here for you!${ANSI_RESET}")
 
         // Vytvoření konfiguračního souboru
         config.addDefault("openai_api_key", "your_openai_api_key_here");
         config.addDefault("enabled", true);
+        config.addDefault("player_dissinterest", true);
         config.addDefault("timer_interval", 60);
         config.addDefault("gpt_version", "gpt-4o-mini");
         config.addDefault("chatbot_name", "AI Friend");
@@ -59,6 +69,9 @@ class AiFriend : JavaPlugin(), Listener {
     
             # Enable or disable the AI Friend plugin
             enabled: ${config.getBoolean("enabled")}
+            
+            # Disable the AI Friend plugin when players are not interested in talking to AI
+            player_dissinterest: ${config.getBoolean("player_dissinterest")}
     
             # Interval in seconds for the timer to call the OpenAI API
             # Must be positive, determines how often the AI Friend will respond to player messages
@@ -69,7 +82,7 @@ class AiFriend : JavaPlugin(), Listener {
             gpt_version: ${config.getString("gpt_version")}
     
             # Name of the OpenAI chatbot
-            openai_chatbot_name: ${config.getString("chatbot_name")}
+            chatbot_name: ${config.getString("chatbot_name")}
     
             # Preferred language for the chatbot responses - English, German, Czech, ...
             preffered_language: ${config.getString("preffered_language")}
@@ -99,12 +112,14 @@ class AiFriend : JavaPlugin(), Listener {
 
             // Ensure the timer interval is positive
             if (timerInterval > 0) {
+
+                timer = Timer()
+
                 // Timer val is in seconds so we need to convert it to milliseconds
                 val timerIntervalMillis = timerInterval * 1000L
 
                 // Add a timer that calls the OpenAI API every timerIntervalMillis
-                val timer = Timer()
-                timer.schedule(0L, timerIntervalMillis) {
+                timer?.schedule(0L, timerIntervalMillis) {
                     if (Bukkit.getOnlinePlayers().isNotEmpty() && playerMessages.isNotEmpty() && enabled) {
                         performOpenAICall()
                     }
@@ -118,7 +133,9 @@ class AiFriend : JavaPlugin(), Listener {
     private fun performOpenAICall() {
         // Prepare the prompt based on player messages
         val prompt = buildString {
-            append("this is the most important thing: If it looks like players are no longer interested in talking to AI in their language $openaiPrefferedLanguage (people are angry about AI, telling something like stop AI etc.) respond only with STOP MESSAGING (we will catch that and stop you for a while).")
+            if(playerDisinterest) {
+                append("this is the most important thing: If it looks like players are no longer interested in talking to AI in their language $openaiPrefferedLanguage (people are angry about AI, telling something like stop AI etc.) respond only with STOP MESSAGING (we will catch that and stop you for a while).")
+            }
             append("You are a chatbot on a Minecraft server, your name is: $openaiChatbotName .")
             append("you will always and only speak in this language: $openaiPrefferedLanguage. ")
             append("These are the messages players have sent since your last call in the format [Player name]: [Player message]: ")
@@ -171,11 +188,11 @@ class AiFriend : JavaPlugin(), Listener {
             //if there is STOP MESSAGING in the response, add a delay like 30 minutes before sending another API request
             if (responseUTF8Clean.contains("STOP MESSAGING")) {
                 enabled = false
-                logger.info("AI Friend is going to sleep for 30 minutes. Players are not interested in talking to me.")
-                val timer = Timer()
-                timer.schedule(1800000) {
+                logger.info("${ANSI_GREEN}AI Friend is going to sleep for 30 minutes. Players are not interested in talking to me.${ANSI_RESET}")
+                timer = Timer()
+                timer?.schedule(1800000) {
                     enabled = true
-                    logger.info("AI Friend is awake. Let's talk!")
+                    logger.info("${ANSI_GREEN}AI Friend is awake. Let's talk!${ANSI_RESET}")
                 }
             } else {
                 Bukkit.broadcastMessage("$openaiChatbotName: $responseUTF8Clean")
@@ -185,10 +202,6 @@ class AiFriend : JavaPlugin(), Listener {
             playerMessages.clear()
         } else {
             logger.severe("Error communicating with server: ${conn.responseCode}")
-
-            // Define ANSI color codes
-            val ANSI_RED = "\u001B[31m"
-            val ANSI_RESET = "\u001B[0m"
 
             // if error is 401 (Unauthorized) send more info to the log
             if (conn.responseCode == 401) {
@@ -212,24 +225,58 @@ class AiFriend : JavaPlugin(), Listener {
         playerMessages.add("- $playerName: $playerMessage")
     }
 
-    override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<String>): Boolean {
-        if (command.name.equals("aifriend", ignoreCase = true)) {
-            if (sender is Player && sender.isOp) {
-                sender.sendMessage("${ChatColor.GREEN}AI Friend Configuration:")
-                sender.sendMessage("${ChatColor.YELLOW}API Key: ${ChatColor.WHITE}$openaiApiKey")
-                sender.sendMessage("${ChatColor.YELLOW}Chatbot Name: ${ChatColor.WHITE}$openaiChatbotName")
-                sender.sendMessage("${ChatColor.YELLOW}Preferred Language: ${ChatColor.WHITE}$openaiPrefferedLanguage")
-                sender.sendMessage("${ChatColor.YELLOW}Personalization: ${ChatColor.WHITE}$openaiPersonalization")
-                sender.sendMessage("${ChatColor.YELLOW}Timer Interval: ${ChatColor.WHITE}$timerInterval seconds")
-                sender.sendMessage("${ChatColor.YELLOW}GPT Version: ${ChatColor.WHITE}$openaiGptVersion")
-                sender.sendMessage("${ChatColor.YELLOW}Enabled: ${ChatColor.WHITE}$enabled")
-            } else {
-                sender.sendMessage("${ChatColor.RED}You must be a server operator to use this command.")
-            }
-            return true
+override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<String>): Boolean {
+    if (command.name.equals("aifriend", ignoreCase = true)) {
+        if (sender is Player && sender.isOp) {
+            sender.sendMessage("${ChatColor.GREEN}AI Friend Configuration:")
+            sender.sendMessage("${ChatColor.YELLOW}API Key: ${ChatColor.WHITE}$openaiApiKey")
+            sender.sendMessage("${ChatColor.YELLOW}Chatbot Name: ${ChatColor.WHITE}$openaiChatbotName")
+            sender.sendMessage("${ChatColor.YELLOW}Preferred Language: ${ChatColor.WHITE}$openaiPrefferedLanguage")
+            sender.sendMessage("${ChatColor.YELLOW}Personalization: ${ChatColor.WHITE}$openaiPersonalization")
+            sender.sendMessage("${ChatColor.YELLOW}Timer Interval: ${ChatColor.WHITE}$timerInterval seconds")
+            sender.sendMessage("${ChatColor.YELLOW}GPT Version: ${ChatColor.WHITE}$openaiGptVersion")
+            sender.sendMessage("${ChatColor.YELLOW}Enabled: ${ChatColor.WHITE}$enabled")
+            sender.sendMessage("${ChatColor.YELLOW}Player Disinterest: ${ChatColor.WHITE}$playerDisinterest")
+            sender.sendMessage("${ChatColor.YELLOW}Reload: ${ChatColor.WHITE}/aifriendreload")
+        } else {
+            sender.sendMessage("${ChatColor.RED}You must be a server operator to use this command.")
         }
-        return false
+        return true
+    } else if (command.name.equals("aifriendreload", ignoreCase = true)) {
+        if (sender is Player && sender.isOp) {
+            reloadConfig()
+            config = getConfig()
+            enabled = config.getBoolean("enabled")
+            playerDisinterest = config.getBoolean("player_dissinterest")
+            timerInterval = config.getInt("timer_interval")
+            openaiApiKey = config.getString("openai_api_key")
+            openaiGptVersion = config.getString("gpt_version")
+            openaiChatbotName = config.getString("chatbot_name")
+            openaiPrefferedLanguage = config.getString("preffered_language")
+            openaiPersonalization = config.getString("personalization")
+            sender.sendMessage("${ChatColor.GREEN}AI Friend configuration reloaded.")
+            //log to console
+            logger.info("${ANSI_GREEN}AI Friend configuration reloaded.${ANSI_RESET}")
+
+            // Reset the times, but i setill want to keep the functionallity
+            timer?.cancel()
+            timer = Timer()
+            timer?.schedule(0L, timerInterval * 1000L) {
+                if (Bukkit.getOnlinePlayers().isNotEmpty() && playerMessages.isNotEmpty() && enabled) {
+                    performOpenAICall()
+                }
+            }
+
+            // Re-register events and restart timers
+            Bukkit.getPluginManager().registerEvents(UpdateChecker(), this)
+            Bukkit.getPluginManager().registerEvents(this, this)
+        } else {
+            sender.sendMessage("${ChatColor.RED}You must be a server operator to use this command.")
+        }
+        return true
     }
+    return false
+}
 
     override fun onDisable() {
         logger.info("AI Friend is going to sleep.")

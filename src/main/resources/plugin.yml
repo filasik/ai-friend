@@ -1,5 +1,5 @@
 name: ai-friend
-version: '1.3.0'
+version: '1.4.0'
 main: me.skerik.aiFriend.AiFriend
 api-version: '1.21'
 prefix: AI Friend
@@ -10,3 +10,6 @@ commands:
   aifriend:
     description: Shows AI Friend configuration information
     usage: /aifriend
+  aifriendreload:
+    description: Reloads the AI Friend plugin configuration
+    usage: /aifriendreload
