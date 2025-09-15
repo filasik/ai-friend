@@ -4,7 +4,7 @@
   <groupId>me.skerik</groupId>
   <artifactId>ai-friend</artifactId>
   <name>ai-friend</name>
-  <version>1.4.0</version>
+  <version>1.4.1</version>
   <build>
     <sourceDirectory>${project.basedir}/src/main/kotlin</sourceDirectory>
     <defaultGoal>clean package</defaultGoal>
