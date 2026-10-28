@@ -29,5 +29,88 @@ command:
     sleeping: '<yellow>sleeping, wakes up in <minutes> min (players were not interested)'
     backoff: '<yellow>waiting <seconds> s before the next attempt (last request failed)'
 
+  mute:
+    done: '<prefix> <gray>You will not be heard by the bot any more. Undo it with <white>/aifriend unmute</white>.'
+    already: '<prefix> <yellow>You have already muted the bot.'
+    disabled: '<prefix> <red>Muting is switched off on this server.'
+  unmute:
+    done: '<prefix> <green>The bot can hear you again.'
+    already: '<prefix> <yellow>You have not muted the bot.'
+  ask:
+    usage: '<prefix> <gray>Usage: <white>/ai <question>'
+    muted: '<prefix> <yellow>You have muted the bot. Use <white>/aifriend unmute</white> first.'
+    disabled: '<prefix> <red>Asking the bot directly is switched off on this server.'
+    thinking: '<prefix> <gray>Thinking...'
+    failed: '<prefix> <red>The bot could not answer right now. Please try again later.'
+    empty: '<prefix> <yellow>The bot has nothing to say about that.'
+  limit:
+    cooldown: '<prefix> <yellow>Please wait <seconds> s before asking again.'
+    player-calls: '<prefix> <yellow>You have used all your questions for today. They reset in <hours> h <minutes> min.'
+    player-tokens: '<prefix> <yellow>Your daily allowance is used up. It resets in <hours> h <minutes> min.'
+    global-calls: '<prefix> <yellow>The bot has reached its limit for today. It resets in <hours> h <minutes> min.'
+    global-tokens: '<prefix> <yellow>The bot has reached its limit for today. It resets in <hours> h <minutes> min.'
+    remaining: '<prefix> <gray>Your questions left today: <white><calls></white> · tokens: <white><tokens></white> · cooldown: <white><cooldown> s'
+    unlimited: 'unlimited'
+  sleep:
+    done: '<prefix> <gray>The bot is quiet for <white><minutes> min</white>. <white>/aifriend wake</white> wakes it up.'
+    invalid: '<prefix> <red>Minutes must be a number between 1 and 1440.'
+  wake:
+    done: '<prefix> <green>The bot is awake again.'
+    already: '<prefix> <yellow>The bot was not sleeping.'
+  status-extra:
+    - '<gray>  Provider: <white><provider>'
+    - '<gray>  Muted players: <white><muted>'
+    - '<gray>  Personas: <white><persona>'
+    - '<gray>  Memory: <white><turns> turns'
+    - '<gray>  Long-term memory: <white><longmemory>'
+  cost:
+    header: '<prefix> <gold>Token usage and estimated cost'
+    lines:
+      - '<gray>  Today: <white><today-in> in</white> / <white><today-out> out</white> tokens · <white><today-cost></white>'
+      - '<gray>  Total since start: <white><total-in> in</white> / <white><total-out> out</white> tokens · <white><total-cost></white>'
+      - '<gray>  Daily warning at: <white><warn>'
+    disabled: '<prefix> <yellow>Cost tracking is switched off (cost.enabled in config.yml).'
+    warning: '<prefix> <red>The estimated cost of today reached <white><cost></white> (warning at <white><warn></white>).'
+  simulate:
+    header: '<prefix> <gold>Dry run, nothing was posted to chat'
+    lines:
+      - '<gray>  Persona: <white><persona>'
+      - '<gray>  Chat lines: <white><queued></white> · memory turns: <white><history></white> · about <white><tokens></white> input tokens'
+      - '<gray>  Would be sent: <white><send>'
+      - '<gray>  Blocked by: <white><blockers>'
+      - '<gray>  Raw answer: <white><raw>'
+      - '<gray>  After filter: <white><filtered>'
+    request: '<gray>  Request: <white><request>'
+    answer-yes: 'yes'
+    answer-no: 'no'
+    none: '-'
+    blocker:
+      DISABLED: 'bot disabled'
+      NO_KEY: 'no api-key'
+      SLEEPING: 'sleeping'
+      BACKOFF: 'waiting after an error'
+      RATE_LIMITED: 'rate limit'
+      NO_CHAT: 'no chat lines'
+      MUTED: 'all authors muted'
+      FILTERED_OUT: 'answer removed by the filter'
+  events:
+    # Shown in /aifriend status when events are on.
+    status: '<gray>  Event reactions: <white><types>'
+    off: 'off'
+
+# Long-term memory (/aifriend forget, forget-all, memory). <note> and <player> are player text, never parsed as MiniMessage.
+memory:
+  disabled: '<prefix> <yellow>Long-term memory is switched off on this server (long-term-memory.enabled in config.yml).'
+  unavailable: '<prefix> <red>Long-term memory is on, but its database is not available. See the console.'
+  forgot-own: '<prefix> <green>Done. The bot has forgotten <count> note(s) about you.'
+  forgot-player: '<prefix> <green>Deleted <count> note(s) about <player>.'
+  forgot-all: '<prefix> <green>Deleted all remembered notes (<count>).'
+  player-unknown: '<prefix> <yellow>No notes found for a player called <player>.'
+  list-header: '<prefix> <gold>What the bot remembers about <player> (<count>)'
+  list-line: '<gray>  - <white><note></white> <dark_gray>(<age>)'
+  list-more: '<gray>  ... and <count> more'
+  list-empty: '<prefix> <gray>The bot remembers nothing about <player>.'
+  failed: '<prefix> <red>The memory database returned an error. See the console.'
+
 update:
   available: '<prefix> <yellow>A new version is available: <white><version></white> <click:open_url:''<url>''><aqua>[download]</aqua></click>'

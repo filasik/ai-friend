@@ -14,7 +14,19 @@
 - [ ] New message key => present in `messages_en.yml` and every bundled locale (`MessagesFilesTest`)
 - [ ] First start on a machine with internet works (libraries are downloaded by the loader); the jar contains only bStats as a shaded library
 - [ ] `gradle.properties`: `pluginVersion`, `paperApiVersion`, `apiVersion`, `minecraftVersion` current; `bstatsId` set to the real bStats plugin id (not 0)
-- [ ] The proxy protocol (`https://gpt.netuj.eu/api/ai_friend.php`) still works with this build; Privacy/data text in README and listings still matches what is sent
+- [ ] The proxy protocol (`https://gpt.netuj.eu/api/ai_friend.php`) still works with this build; Privacy/data text in README and listings still matches what is sent, per provider
+- [ ] 2.1.0: each direct provider verified with a REAL key / running Ollama (OpenAI, Anthropic, Ollama, one `custom` such as OpenRouter); request shapes so far only tested against mock servers. Model id `claude-haiku-5-5` checked against the live Anthropic model list
+- [ ] 2.1.0: failover works (primary key broken -> next provider answers, cooldown visible), cache off by default
+- [ ] 2.1.0: every new feature is OFF in a fresh `config.yml`; enabling each one works and `docs/MANUAL_TEST.md` section "2.1.0" is done
+- [ ] 2.1.0: upgrade from a real 2.0.0 `config.yml`: `config-version: 3`, new sections appended with comments, own values kept, `config.yml.bak-v1` written, behaviour unchanged (proxy still primary)
+- [ ] 2.1.0: no API key (any provider) appears in the log, `/aifriend status`, `/aifriend simulate` output or error messages; a provider placeholder key (`your_*_here`) counts as unset
+- [ ] 2.1.0: new permissions in `paper-plugin.yml` match the README table (aifriend.mute, ask, sleep, simulate, cost, bypass-limits)
+- [ ] 2.1.0: long-term memory is OFF in a fresh `config.yml` and no database file is created then; with it on, `docs/MANUAL_TEST.md` section "Long-term memory and database" is done, including MariaDB (never tested live so far; only SQLite is covered by the unit tests)
+- [ ] 2.1.0: privacy text (README, README.cs, Modrinth, Spigot) matches what long-term memory stores and sends (extraction request with chat lines, embeddings service); `forget`, `forget-all`, `memory`, mute-deletes and `retention-days` work
+- [ ] 2.1.0: `libraries.txt` resolves sqlite-jdbc, mariadb-java-client and HikariCP on a clean server (first start with internet); the jar contains only bStats as a shaded library
+- [ ] 2.1.0: `Migrations` is append-only (v1 untouched), `MigrationsTest` green; every later schema change adds a new version plus an upgrade test
+- [ ] 2.1.0: public API (`AiFriendResponseEvent`, `AiFriendApi`) and the PlaceholderAPI expansion are in the README and the listings and verified with a real PlaceholderAPI
+- [ ] 2.1.0: `CHANGELOG.md` has a `## 2.1.0` heading (release.yml extracts the section by it)
 - [ ] `CHANGELOG.md`, `README.md`, `README.cs.md`, `docs/modrinth.md`, `docs/spigot.bbcode.txt` match the real code (Paper-only note present)
 - [ ] Icon, banner (`scripts/render-assets.sh`), at least 2 gallery images (illustrations labelled as such, unless real screenshots)
 - [ ] README: commands, permissions, configuration, privacy, license

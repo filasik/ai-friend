@@ -8,13 +8,37 @@ authors: [Filasik, Patr1xCZ]
 api-version: '${apiVersion}'
 # Everything goes through the Scheduler abstraction (global / entity / async), so Folia works.
 folia-supported: true
+dependencies:
+  server:
+    PlaceholderAPI:
+      load: BEFORE
+      required: false
+      join-classpath: true
 permissions:
   aifriend.use:
     description: Use /aifriend (version and help)
     default: true
   aifriend.admin:
-    description: /aifriend status, update notifications on join
+    description: /aifriend status, update notifications on join, long-term memory admin (/aifriend forget <player>, forget-all, memory <player>)
     default: op
   aifriend.reload:
     description: Reload the configuration with /aifriend reload
+    default: op
+  aifriend.mute:
+    description: Mute and unmute the bot for yourself, delete and list your own long-term notes (/aifriend mute, unmute, forget, memory)
+    default: true
+  aifriend.ask:
+    description: Ask the bot directly (/ai <question>) and address it in chat with @name
+    default: true
+  aifriend.sleep:
+    description: Put the bot to sleep or wake it up (/aifriend sleep, /aifriend wake)
+    default: op
+  aifriend.simulate:
+    description: Dry run without posting to chat (/aifriend simulate)
+    default: op
+  aifriend.cost:
+    description: Show token usage and estimated cost (/aifriend cost), receive the daily cost warning
+    default: op
+  aifriend.bypass-limits:
+    description: Not affected by the cooldown and the daily limits of the rate limiter
     default: op

@@ -1,49 +1,73 @@
 [SIZE=6][B]AI Friend[/B][/SIZE]
-A friendly AI companion for your Minecraft chat. It reads the public chat and, every minute, posts one short reply as a bot with your own name, language and personality.
+A friendly AI companion for your Minecraft chat. It reads the public chat and posts short replies as a bot with your own name, language and personality, using OpenAI, Claude, a local Ollama model or any OpenAI-compatible server.
 
-[COLOR=rgb(226, 80, 80)][B]Paper only.[/B][/COLOR] Version 2.0.0 requires Paper 26.3+ and Java 25. Spigot and Bukkit are no longer supported; the 1.x jar stays available on GitHub: https://github.com/filasik/ai-friend/releases
+[COLOR=rgb(226, 80, 80)][B]Paper only.[/B][/COLOR] Version 2.x requires Paper 26.3+ and Java 25. Spigot and Bukkit are no longer supported; the 1.x jar stays available on GitHub: https://github.com/filasik/ai-friend/releases
 
 [SIZE=5][B]Features[/B][/SIZE]
 [LIST]
-[*]One short reply per interval (interval-seconds, default 60) as "chatbot-name: reply"
-[*]Configurable bot name, reply language and a free-text personalization (website, jokes, tone)
-[*]Goes to sleep (sleep-minutes) when players seem annoyed; one player alone cannot silence it, at least 2 different players must be involved
-[*]Free 3-day trial with the key "trial", or your own OpenAI key through the proxy
-[*]Never blocks the server: async requests with timeouts, exponential backoff on failures (max 15 min), bounded message queue
+[*]One short reply per interval (interval-seconds, default 60) as "chatbot-name: reply", plus direct questions with /ai <question> or @AI Friend ...
+[*]Choose your AI: OpenAI, Anthropic Claude, local Ollama, any OpenAI-compatible endpoint (OpenRouter, LM Studio, ...) or the original proxy (still the default); failover chain and optional answer cache
+[*]Optional chat features, all off by default: personas (by world and time of day), conversation memory, rate and daily limits, cost estimate, reply filter, reactions to deaths, advancements, first joins, boss kills and explosions
+[*]Players can switch the bot off for themselves with /aifriend mute
+[*]Optional long-term memory (off by default): the bot remembers facts players told about themselves, in SQLite or MariaDB; players list and delete their notes with /aifriend memory and /aifriend forget
+[*]Public API (AiFriendResponseEvent, AiFriendApi) and PlaceholderAPI placeholders (%aifriend_state%, %aifriend_mood%, %aifriend_lastmessage%, %aifriend_provider%, %aifriend_queued%, %aifriend_muted%, %aifriend_calls_left%)
+[*]Admin tools: /aifriend sleep, wake, simulate (dry run, nothing is posted), cost, status
+[*]Configurable bot name, reply language and a free-text personalization
+[*]Goes to sleep when players seem annoyed; one player alone cannot silence it
+[*]Free 3-day trial with the key "trial" (proxy), or your own key
+[*]Never blocks the server: async requests with timeouts, backoff on failures, bounded queue
 [*]Player chat is sent as clearly delimited data, never as instructions
-[*]Commented config.yml that is never overwritten and gains new options on update; old 1.x keys are migrated automatically
-[*]English and Czech messages (MiniMessage, editable), update notices from GitHub
+[*]Commented config.yml that gains new options on update without touching your values; English and Czech messages
 [*]Folia-compatible code (no BukkitScheduler)
 [/LIST]
 
 [SIZE=5][B]Quick start[/B][/SIZE]
 [LIST=1]
 [*]Put the jar in plugins/ and start the server.
-[*]Set api-key: "trial" (or your OpenAI key) in plugins/ai-friend/config.yml.
+[*]Set api-key: "trial" in plugins/ai-friend/config.yml, or choose a provider under provider: (OpenAI, Claude, Ollama, custom).
 [*]/aifriend reload, then /aifriend status.
 [/LIST]
 
 [SIZE=5][B]Commands & Permissions[/B][/SIZE]
 [LIST]
 [*][B]/aifriend[/B] - version and short help (aifriend.use, everyone)
-[*][B]/aifriend status[/B] - state, masked API key, queue, sleeping/backoff info (aifriend.admin, op)
+[*][B]/aifriend status[/B] - state, provider, persona, masked API key, queue (aifriend.admin, op)
 [*][B]/aifriend reload[/B] - reload config and messages (aifriend.reload, op); /aifriendreload still works
+[*][B]/ai <question>[/B] and [B]/aifriend limits[/B] - ask the bot directly, show your remaining calls (aifriend.ask, everyone)
+[*][B]/aifriend mute[/B] / [B]unmute[/B] - switch the bot off or on for yourself (aifriend.mute, everyone)
+[*][B]/aifriend memory[/B] / [B]forget[/B] - list / delete the notes the bot keeps about you (aifriend.mute, everyone)
+[*][B]/aifriend memory <player>[/B] / [B]forget <player>[/B] / [B]forget-all[/B] - list / delete notes of a player or of everybody (aifriend.admin, op)
+[*][B]/aifriend sleep [minutes][/B] / [B]wake[/B] - quiet the bot or wake it (aifriend.sleep, op)
+[*][B]/aifriend simulate [nocall][/B] - dry run without posting (aifriend.simulate, op)
+[*][B]/aifriend cost[/B] - token totals and estimated cost (aifriend.cost, op)
+[*]aifriend.bypass-limits (op) exempts a player from the cooldown and daily limits
 [/LIST]
 
 [SIZE=5][B]Configuration[/B][/SIZE]
-Key options in config.yml (all commented): enabled, api-key, model (default gpt-4o-mini), chatbot-name, language, personalization, interval-seconds (5-3600), stop-when-ignored, sleep-minutes, max-queued-messages, max-reply-length, http.* timeouts, locale (en/cs), update-check, metrics. Full reference: https://github.com/filasik/ai-friend#configuration
+Key options in config.yml (all commented): provider.* (primary, failover, cache, per-provider settings), personas, memory, limits, cost, reply-filter, mentions, opt-out, events, storage (SQLite or MariaDB), long-term-memory, enabled, api-key, model (default gpt-4o-mini), chatbot-name, language, personalization, interval-seconds (5-3600), stop-when-ignored, sleep-minutes, max-queued-messages, max-reply-length, http.* timeouts, locale (en/cs), update-check, metrics. Full reference: https://github.com/filasik/ai-friend#configuration
 
 [SIZE=5][B]Privacy / data[/B][/SIZE]
-When the bot is active, AI Friend sends recent chat lines [B]including player names[/B], the prompt, your API key, the model name and your server's address to a proxy at gpt.netuj.eu, [B]operated by the plugin author[/B], which forwards it to the AI provider. Chat of your players is therefore sent to a third party; mention it in your server rules or privacy policy.
+What leaves your server depends on provider.primary (and the failover list). A request contains recent chat lines [B]including player names[/B], the prompt, optional conversation memory and event descriptions.
+[LIST]
+[*][B]proxy[/B] (default): sent to gpt.netuj.eu, [B]operated by the plugin author[/B], together with your API key, the model name and your server's address, and forwarded to OpenAI.
+[*][B]openai / anthropic[/B]: sent directly to api.openai.com / api.anthropic.com with your key, no proxy involved.
+[*][B]ollama[/B]: sent only to your Ollama server (local by default); nothing leaves the machine.
+[*][B]custom[/B]: sent to the endpoint you configure (OpenRouter, your own server, ...).
+[/LIST]
+[B]Long-term memory[/B] (off by default) stores, in your own database, the player UUID and name and short notes (max 120 characters) the model wrote from what the player said about themselves, plus optionally an embedding of each note. To find them, an extra request sends recent chat lines (with player names) to your AI provider every extract-every-exchanges answers, and with embeddings notes and chat text also go to the embedding service. The model is told to keep nothing sensitive and notes that look like contact data are dropped, but check /aifriend memory <player> if in doubt. Players delete their notes with /aifriend forget, muting the bot stops collection (and deletes the notes by default), retention-days removes old ones.
 
-Nothing is sent while the API key is not set or the bot is disabled. The only other network calls are anonymous bStats statistics (metrics: false turns them off) and the GitHub update check (update-check: false).
+Only public chat is read: private messages, commands, cancelled messages and staff/party/local channels are never collected (only a question asked on purpose with /ai is sent). Chat of your players is therefore sent to a third party unless you use a local model; mention it in your server rules or privacy policy. API keys stay in config.yml and are masked in output. Nothing is sent while no provider is usable or the bot is disabled; muted players are never stored or sent. The only other network calls are anonymous bStats statistics (metrics: false turns them off) and the GitHub update check (update-check: false).
 
-Direct OpenAI access and other providers are planned, not available yet.
+[SIZE=5][B]Integrations[/B][/SIZE]
+[LIST]
+[*]API for plugins: AiFriendResponseEvent (asynchronous, cancellable, setText) fires right before the bot posts; AiFriendApi is available from the Bukkit ServicesManager.
+[*]PlaceholderAPI (soft dependency): %aifriend_state%, %aifriend_mood% (happy/sleepy/confused/off), %aifriend_lastmessage%, %aifriend_provider%, %aifriend_queued%, %aifriend_muted%, %aifriend_calls_left%.
+[/LIST]
 
 [SIZE=5][B]Compatibility[/B][/SIZE]
 [LIST]
 [*]Paper 26.3+ (Java 25). Not Spigot or Bukkit.
-[*]Needs outbound HTTPS to gpt.netuj.eu. The first start downloads the plugin's libraries from Maven Central.
+[*]Needs outbound HTTPS to your chosen provider (not for a local Ollama). The first start downloads the plugin's libraries (database drivers, connection pool) from Maven Central.
 [/LIST]
 
 [SIZE=5][B]Support[/B][/SIZE]

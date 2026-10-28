@@ -29,5 +29,87 @@ command:
     sleeping: '<yellow>spí, probudí se za <minutes> min (hráči neměli zájem)'
     backoff: '<yellow>čeká <seconds> s před dalším pokusem (poslední požadavek selhal)'
 
+  mute:
+    done: '<prefix> <gray>Bot vás už neslyší. Zrušíte to příkazem <white>/aifriend unmute</white>.'
+    already: '<prefix> <yellow>Bota už máte ztlumeného.'
+    disabled: '<prefix> <red>Ztlumení je na tomto serveru vypnuté.'
+  unmute:
+    done: '<prefix> <green>Bot vás zase slyší.'
+    already: '<prefix> <yellow>Bota nemáte ztlumeného.'
+  ask:
+    usage: '<prefix> <gray>Použití: <white>/ai <dotaz>'
+    muted: '<prefix> <yellow>Máte ztlumeného bota. Nejdřív použijte <white>/aifriend unmute</white>.'
+    disabled: '<prefix> <red>Přímé dotazy na bota jsou na tomto serveru vypnuté.'
+    thinking: '<prefix> <gray>Přemýšlím...'
+    failed: '<prefix> <red>Bot teď nemůže odpovědět. Zkuste to prosím později.'
+    empty: '<prefix> <yellow>Bot k tomu nemá co říct.'
+  limit:
+    cooldown: '<prefix> <yellow>Počkejte prosím <seconds> s, než se zeptáte znovu.'
+    player-calls: '<prefix> <yellow>Dnešní dotazy jste vyčerpali. Obnoví se za <hours> h <minutes> min.'
+    player-tokens: '<prefix> <yellow>Váš denní limit je vyčerpaný. Obnoví se za <hours> h <minutes> min.'
+    global-calls: '<prefix> <yellow>Bot dnes dosáhl svého limitu. Obnoví se za <hours> h <minutes> min.'
+    global-tokens: '<prefix> <yellow>Bot dnes dosáhl svého limitu. Obnoví se za <hours> h <minutes> min.'
+    remaining: '<prefix> <gray>Zbývající dotazy dnes: <white><calls></white> · tokeny: <white><tokens></white> · čekání: <white><cooldown> s'
+    unlimited: 'neomezeno'
+  sleep:
+    done: '<prefix> <gray>Bot mlčí <white><minutes> min</white>. <white>/aifriend wake</white> ho probudí.'
+    invalid: '<prefix> <red>Minuty musí být číslo od 1 do 1440.'
+  wake:
+    done: '<prefix> <green>Bot je zase vzhůru.'
+    already: '<prefix> <yellow>Bot nespal.'
+  status-extra:
+    - '<gray>  Poskytovatel: <white><provider>'
+    - '<gray>  Hráči s ztlumeným botem: <white><muted>'
+    - '<gray>  Persony: <white><persona>'
+    - '<gray>  Paměť: <white><turns> výměn'
+    - '<gray>  Dlouhodobá paměť: <white><longmemory>'
+  cost:
+    header: '<prefix> <gold>Spotřeba tokenů a odhad ceny'
+    lines:
+      - '<gray>  Dnes: <white><today-in> vstup</white> / <white><today-out> výstup</white> tokenů · <white><today-cost></white>'
+      - '<gray>  Celkem od startu: <white><total-in> vstup</white> / <white><total-out> výstup</white> tokenů · <white><total-cost></white>'
+      - '<gray>  Denní upozornění při: <white><warn>'
+    disabled: '<prefix> <yellow>Sledování nákladů je vypnuté (cost.enabled v config.yml).'
+    warning: '<prefix> <red>Odhadovaná cena dneška dosáhla <white><cost></white> (upozornění při <white><warn></white>).'
+  simulate:
+    header: '<prefix> <gold>Zkušební běh, nic se neposlalo do chatu'
+    lines:
+      - '<gray>  Persona: <white><persona>'
+      - '<gray>  Řádky chatu: <white><queued></white> · repliky paměti: <white><history></white> · asi <white><tokens></white> vstupních tokenů'
+      - '<gray>  Bylo by odesláno: <white><send>'
+      - '<gray>  Zablokováno: <white><blockers>'
+      - '<gray>  Surová odpověď: <white><raw>'
+      - '<gray>  Po filtru: <white><filtered>'
+    request: '<gray>  Dotaz: <white><request>'
+    answer-yes: 'ano'
+    answer-no: 'ne'
+    none: '-'
+    blocker:
+      DISABLED: 'bot je vypnutý'
+      NO_KEY: 'chybí api-key'
+      SLEEPING: 'spí'
+      BACKOFF: 'čeká po chybě'
+      RATE_LIMITED: 'limit'
+      NO_CHAT: 'žádné řádky chatu'
+      MUTED: 'všichni autoři jsou ztlumení'
+      FILTERED_OUT: 'odpověď odstranil filtr'
+  events:
+    status: '<gray>  Reakce na události: <white><types>'
+    off: 'vypnuto'
+
+# Dlouhodobá paměť (/aifriend forget, forget-all, memory). <note> a <player> jsou text hráčů, nikdy se nečtou jako MiniMessage.
+memory:
+  disabled: '<prefix> <yellow>Dlouhodobá paměť je na tomto serveru vypnutá (long-term-memory.enabled v config.yml).'
+  unavailable: '<prefix> <red>Dlouhodobá paměť je zapnutá, ale její databáze není dostupná. Koukni do konzole.'
+  forgot-own: '<prefix> <green>Hotovo. Bot zapomněl <count> poznámek o tobě.'
+  forgot-player: '<prefix> <green>Smazáno poznámek o hráči <player>: <count>.'
+  forgot-all: '<prefix> <green>Všechny zapamatované poznámky smazány (<count>).'
+  player-unknown: '<prefix> <yellow>Hráč <player> nemá žádné poznámky.'
+  list-header: '<prefix> <gold>Co si bot pamatuje o hráči <player> (<count>)'
+  list-line: '<gray>  - <white><note></white> <dark_gray>(<age>)'
+  list-more: '<gray>  ... a dalších <count>'
+  list-empty: '<prefix> <gray>Bot si o hráči <player> nic nepamatuje.'
+  failed: '<prefix> <red>Databáze paměti vrátila chybu. Koukni do konzole.'
+
 update:
   available: '<prefix> <yellow>Je dostupná nová verze: <white><version></white> <click:open_url:''<url>''><aqua>[stáhnout]</aqua></click>'

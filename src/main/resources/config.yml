@@ -7,7 +7,7 @@
 # Config format version. Do not change: when you update the plugin, options that are new in the
 # newer version are added to this file automatically (your values stay, a backup is saved first).
 # Options of AI Friend 1.x (openai_api_key, gpt_version, ...) are renamed automatically on the first start.
-config-version: 1
+config-version: 3
 
 # Language of the plugin's own messages (commands, status): en, cs.
 # The files plugins/ai-friend/messages_<locale>.yml are yours to edit; missing keys fall back to the built-in text.
@@ -74,3 +74,216 @@ http:
   connect-timeout-seconds: 10
   read-timeout-seconds: 30
   # After a failed request the bot waits 1, 2, 4, ... minutes (at most 15) before it tries again.
+
+# --- Where the answers come from ---------------------------------------------
+
+# Where the answers come from. Everything here is optional: with the defaults the bot keeps using the
+# proxy (api-key and model above), exactly as before.
+provider:
+  # Which provider answers: proxy | openai | anthropic | ollama | custom (or a name you define below).
+  #   proxy      the gpt.netuj.eu proxy, uses api-key and model from the top of this file
+  #   openai     OpenAI directly (https://platform.openai.com), needs providers.openai.api-key
+  #   anthropic  Claude directly (https://console.anthropic.com), needs providers.anthropic.api-key
+  #   ollama     a local Ollama server, no key (https://ollama.com)
+  #   custom     any OpenAI-compatible server (OpenRouter, LM Studio, vLLM, ...): needs base-url and model
+  # With a direct provider chat lines go straight to that company, not through the proxy.
+  primary: proxy
+
+  # Providers to try, in this order, when the primary fails (error, timeout, rate limit).
+  # A failing provider is skipped for failover-cooldown-seconds so a dead one is not tried on every request.
+  # Example: failover: [openai, ollama]
+  failover: []
+  failover-cooldown-seconds: 60
+
+  # Remember answers to identical requests for a while (saves money when the same chat is asked twice).
+  # Chat is rarely identical, so this is off by default.
+  cache:
+    enabled: false
+    max-entries: 200
+    ttl-minutes: 10
+
+  # Settings per provider. Only what you change needs to be listed. Keys are secrets: never share this file.
+  # Every provider takes: model, base-url (has a sensible default), api-key, max-output-tokens (16-4000).
+  providers:
+    # proxy has no options here (it uses api-key and model from the top of this file).
+    openai:
+      model: gpt-4o-mini
+      api-key: your_openai_api_key_here
+      base-url: https://api.openai.com/v1
+      max-output-tokens: 200
+    anthropic:
+      model: claude-haiku-5-5
+      api-key: your_anthropic_api_key_here
+      base-url: https://api.anthropic.com
+      max-output-tokens: 200
+    ollama:
+      model: llama3.2
+      base-url: http://localhost:11434
+      max-output-tokens: 200
+    custom:
+      model: ""
+      base-url: ""        # e.g. https://openrouter.ai/api/v1 or http://localhost:1234/v1
+      api-key: ""         # leave empty for servers without a key
+      max-output-tokens: 200
+    # You can add more under your own name by giving a type, e.g. a second OpenAI-compatible server:
+    #   openrouter:
+    #     type: custom
+    #     base-url: https://openrouter.ai/api/v1
+    #     api-key: sk-or-...
+    #     model: openai/gpt-4o-mini
+
+# --- Personas -----------------------------------------------------------------
+# Give the bot a personality. One persona is picked for every request among those whose conditions match.
+# The prompt text is yours (trusted) and is added to the system prompt. Without matching persona the normal behaviour is used.
+personas:
+  enabled: false
+  list:
+    - name: Pirate
+      prompt: "You are a cheerful pirate. Use pirate slang, but stay helpful and short."
+      # worlds: only in these worlds (empty or missing = every world)
+      worlds: []
+      # time: any | day | night
+      time: any
+      # weight: chance relative to the other matching personas (0 = never used, 1-1000)
+      weight: 1
+    - name: Wise old man
+      prompt: "You are a calm wise old man who answers with a short proverb."
+      time: night
+      weight: 1
+
+# --- Conversation memory ------------------------------------------------------
+# The bot remembers its last exchanges (what players wrote, what it answered) and sends them as chat history.
+# Costs more tokens per request.
+memory:
+  enabled: false
+  # How many exchanges (0-50; 0 = off).
+  exchanges: 5
+  # Hard limit of remembered characters (100-20000). The oldest exchanges are forgotten first.
+  max-chars: 2000
+
+# --- Rate limits ---------------------------------------------------------------
+# Protects your wallet. Every number: 0 = unlimited. Days end at midnight of the server's time zone.
+limits:
+  enabled: false
+  # Seconds a player has to wait between two requests that involve him (/ai and mentions).
+  cooldown-seconds: 30
+  # Per player and day.
+  player-daily-calls: 50
+  player-daily-tokens: 0
+  # For the whole server and day (also counts automatic answers and event reactions).
+  global-daily-calls: 0
+  global-daily-tokens: 0
+
+# --- Cost estimate ---------------------------------------------------------------
+# /aifriend cost shows token totals and an estimated price. Prices are per 1 million tokens, in your currency,
+# copy them from your provider's price list. Totals are kept in memory (they restart with the server).
+cost:
+  enabled: false
+  input-price-per-million: 0.15
+  output-price-per-million: 0.60
+  # Warn admins (once a day) when the estimated cost of the day reaches this amount. 0 = no warning.
+  warn-daily-cost: 0
+
+# --- Reply filter ------------------------------------------------------------------
+# Applied to every answer before it reaches the chat. Colour codes (§) and control characters are always removed
+# and the answer is always cut to max-length; the rest below needs enabled: true.
+reply-filter:
+  enabled: false
+  # Longest answer in characters (20-1000). Overrides max-reply-length when the filter is enabled.
+  max-length: 256
+  # Whole words, case-insensitive. Example: [badword, another]
+  banned-words: []
+  # replace = banned words become ***, drop = an answer with a banned word is not posted at all.
+  banned-mode: replace
+  # Remove links and web addresses from answers.
+  block-urls: false
+
+# --- Mentions and /ai ------------------------------------------------------------------
+# Players can talk to the bot directly: "@AI Friend question" or "AI Friend, question" in chat, or /ai <question>.
+mentions:
+  enabled: false
+  # true = a mention is answered immediately (limits still apply), false = it only counts as normal chat.
+  direct-answer: true
+  # More names that call the bot (case and accents do not matter), e.g. [bot, robot].
+  triggers: []
+  # true = the name anywhere in a line counts ("is the bot sleeping?"), not only @name or "name,".
+  react-anywhere: false
+
+# --- Opt-out -----------------------------------------------------------------------------
+# Players can switch the bot off for themselves with /aifriend mute (and back with /aifriend unmute).
+# Muted players' chat is never stored and never sent to the AI. The list is saved in the plugin folder.
+opt-out:
+  enabled: false
+  file: muted-players.yml
+
+# --- Reactions to game events ------------------------------------------------------------------
+# The bot may comment on what happens in the game. Only one reaction per cooldown, so it cannot spam.
+events:
+  enabled: false
+  cooldown-seconds: 30
+  death: true
+  advancement: true
+  first-join: true
+  # Ender Dragon and Wither killed.
+  boss-kill: true
+  # Big explosions (off by default, can be noisy on survival servers).
+  explosion: false
+  explosion-min-power: 6
+
+# --- Database (shared storage) ----------------------------------------------------------------
+# Used by the features that keep data (currently only long-term memory, see below). Nothing is created
+# in the database while no such feature is switched on. /aifriend reload reopens the database after a change here.
+storage:
+  # sqlite  = single file in the plugin folder, zero setup (default)
+  # mariadb = MariaDB or MySQL server (use this to share data between servers)
+  type: sqlite
+  sqlite:
+    file: ai-friend.db
+    # Concurrent database connections (writes are serialized by SQLite anyway)
+    pool-size: 3
+  mariadb:
+    host: localhost
+    port: 3306
+    database: aifriend
+    user: aifriend
+    password: change-me
+    pool-size: 6
+    # TLS mode of the connection. Leave empty for the driver default.
+    # MySQL 8+ with a self-signed certificate (the default install) fails with
+    # "Cannot use authentication plugin caching_sha2_password with a Self signed certificates":
+    # use "trust" (encrypted, certificate not verified), or "disable" on a trusted local network.
+    # Other values: verify-ca, verify-full (need a proper certificate).
+    ssl-mode: ""
+
+# --- Long-term memory -----------------------------------------------------------------------------
+# The bot remembers short facts players told about themselves (their builds, preferences, plans) and brings them
+# back into later answers. Off by default.
+# PRIVACY: every N answered exchanges one extra request sends the recent chat lines of the players to your AI
+# provider to pick out the facts (that is more data than the normal answers use, tell your players). The notes are
+# stored in the database above, by player UUID. The model is told to keep nothing sensitive (real name, address, age,
+# contact data, passwords) and notes that look like e-mail, phone, link or IP are dropped by the plugin as well.
+# Players delete their notes with /aifriend forget, admins with /aifriend forget <player> and /aifriend forget-all.
+# Players who muted the bot (/aifriend mute) are never collected. /aifriend reload applies every option below,
+# including switching this on or off (the database is opened or closed then).
+long-term-memory:
+  enabled: false
+  # Look for notes after this many answered exchanges (1-1000). Every look is one request to your AI provider.
+  extract-every-exchanges: 6
+  # Notes kept per player (1-500). When there are more, the least recently used are dropped.
+  max-notes-per-player: 20
+  # Delete notes that were not used for this many days (0-36500; 0 = keep forever). Cleaned once a day.
+  retention-days: 0
+  # How many notes (in total, about the players in the current chat) go into one request (1-50).
+  retrieval-top-k: 5
+  # Delete a player's notes when he mutes the bot with /aifriend mute.
+  delete-on-mute: true
+  # Which notes fit the current chat. With "none" notes are matched by shared words (works everywhere, no extra cost).
+  # With embeddings they are matched by meaning, but every note and every request is also sent to the embedding service.
+  embeddings:
+    # none, or the name of an entry under provider.providers (openai, custom, ollama or your own).
+    # Anthropic and the proxy have no embeddings: use none, or another provider just for this.
+    backend: none
+    # Embedding model. Empty = text-embedding-3-small (openai, custom) or nomic-embed-text (ollama).
+    model: ""
+    # Empty = the base-url of that provider.
+    base-url: ""

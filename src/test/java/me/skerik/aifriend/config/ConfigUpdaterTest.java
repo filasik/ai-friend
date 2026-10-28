@@ -130,6 +130,164 @@ class ConfigUpdaterTest {
 
     @Test
     void bundledConfigDeclaresAVersion() throws Exception {
-        assertTrue(bundled().getInt(ConfigUpdater.VERSION_KEY, 0) >= 1);
+        assertEquals(3, bundled().getInt(ConfigUpdater.VERSION_KEY, 0));
+    }
+
+    private static final java.util.List<String> NEW_SECTIONS = java.util.List.of("provider", "personas", "memory",
+            "limits", "cost", "reply-filter", "mentions", "opt-out", "events", "storage", "long-term-memory");
+
+    /** What a 2.0.0 install wrote: config-version 1, only the 2.0.0 keys, one admin comment. */
+    private static final String V200 = """
+            config-version: 1
+            locale: cs
+            update-check: false
+            command:
+              aliases: [friend]
+            metrics: true
+            enabled: true
+            # my key note
+            api-key: sk-abcdefghijkl
+            model: gpt-4o
+            chatbot-name: Bob
+            language: Czech
+            personalization: "hello"
+            interval-seconds: 120
+            stop-when-ignored: false
+            sleep-minutes: 10
+            max-queued-messages: 20
+            max-reply-length: 100
+            http:
+              connect-timeout-seconds: 5
+              read-timeout-seconds: 15
+            """;
+
+    private static void assertNewSectionsWithComments(YamlConfiguration user, String out) {
+        for (String section : NEW_SECTIONS) {
+            assertTrue(user.isConfigurationSection(section), section + " missing");
+            assertFalse(user.getComments(section).isEmpty(), section + " has no comment");
+        }
+        assertEquals(3, user.getInt(ConfigUpdater.VERSION_KEY));
+        assertTrue(out.contains("Conversation memory"), out);
+        assertTrue(out.contains("Rate limits"), out);
+    }
+
+    @Test
+    void oneDotXConfigGetsTheNewSections() throws Exception {
+        YamlConfiguration user = load(LEGACY);
+        YamlConfiguration defaults = bundled();
+        ConfigUpdater.merge(user, defaults);
+        ConfigUpdater.migrate(user, ConfigUpdater.RENAMES);
+        String out = user.saveToString();
+        assertNewSectionsWithComments(user, out);
+        assertEquals("sk-test123456789", user.getString("api-key"));
+        assertEquals(2, user.getMapList("personas.list").size());
+        YamlConfiguration again = load(out);
+        assertEquals(0, ConfigUpdater.merge(again, defaults));
+        assertEquals(out, again.saveToString());
+    }
+
+    @Test
+    void twoDotZeroConfigGetsTheNewSectionsAndKeepsEveryValue() throws Exception {
+        YamlConfiguration user = load(V200);
+        YamlConfiguration defaults = bundled();
+        int added = ConfigUpdater.merge(user, defaults);
+        assertTrue(added > 0);
+        String out = user.saveToString();
+        assertNewSectionsWithComments(user, out);
+        assertTrue(out.contains("# my key note"), out);
+        assertEquals("cs", user.getString("locale"));
+        assertFalse(user.getBoolean("update-check"));
+        assertEquals(java.util.List.of("friend"), user.getStringList("command.aliases"));
+        assertEquals("sk-abcdefghijkl", user.getString("api-key"));
+        assertEquals("gpt-4o", user.getString("model"));
+        assertEquals("Bob", user.getString("chatbot-name"));
+        assertEquals("Czech", user.getString("language"));
+        assertEquals("hello", user.getString("personalization"));
+        assertEquals(120, user.getInt("interval-seconds"));
+        assertFalse(user.getBoolean("stop-when-ignored"));
+        assertEquals(10, user.getInt("sleep-minutes"));
+        assertEquals(20, user.getInt("max-queued-messages"));
+        assertEquals(100, user.getInt("max-reply-length"));
+        assertEquals(5, user.getInt("http.connect-timeout-seconds"));
+        assertEquals(15, user.getInt("http.read-timeout-seconds"));
+
+        YamlConfiguration again = load(out);
+        assertEquals(0, ConfigUpdater.merge(again, defaults));
+        assertEquals(out, again.saveToString());
+
+        Logger log = Logger.getLogger("ConfigUpdaterTest");
+        log.setLevel(Level.OFF);
+        Settings s = Settings.load(again, log);
+        assertEquals(120, s.intervalSeconds());
+        assertEquals(2, s.features().personas().personas().size());
+    }
+
+    @Test
+    void adminListValuesSurviveTheUpdate() throws Exception {
+        String text = V200 + """
+                personas:
+                  enabled: true
+                  list:
+                    - name: Mine
+                      prompt: "Be mine"
+                """;
+        YamlConfiguration user = load(text);
+        ConfigUpdater.merge(user, bundled());
+        assertTrue(user.getBoolean("personas.enabled"));
+        var list = user.getMapList("personas.list");
+        assertEquals(1, list.size());
+        assertEquals("Mine", list.get(0).get("name"));
+        YamlConfiguration again = load(user.saveToString());
+        assertEquals(1, again.getMapList("personas.list").size());
+        assertEquals(0, ConfigUpdater.merge(again, bundled()));
+    }
+
+    /** What a 2.1.0 install (config-version 2, everything before long-term memory) has on disk. */
+    private static final String V210 = """
+            config-version: 2
+            locale: cs
+            api-key: sk-abcdefghijkl
+            # my provider note
+            provider:
+              primary: openai
+              providers:
+                openai:
+                  api-key: sk-openai-abcdefgh
+            memory:
+              enabled: true
+              exchanges: 9
+            """;
+
+    @Test
+    void twoDotOneConfigGetsStorageAndLongTermMemoryWithoutTouchingAnything() throws Exception {
+        YamlConfiguration user = load(V210);
+        YamlConfiguration defaults = bundled();
+        assertTrue(ConfigUpdater.merge(user, defaults) > 0);
+        String out = user.saveToString();
+        assertEquals(3, user.getInt(ConfigUpdater.VERSION_KEY));
+        assertTrue(out.contains("# my provider note"), out);
+        assertEquals("openai", user.getString("provider.primary"));
+        assertEquals("sk-openai-abcdefgh", user.getString("provider.providers.openai.api-key"));
+        assertEquals(9, user.getInt("memory.exchanges"));
+        assertEquals("sqlite", user.getString("storage.type"));
+        assertEquals("ai-friend.db", user.getString("storage.sqlite.file"));
+        assertEquals(6, user.getInt("storage.mariadb.pool-size"));
+        assertFalse(user.getBoolean("long-term-memory.enabled"));
+        assertEquals("none", user.getString("long-term-memory.embeddings.backend"));
+        assertFalse(user.getComments("long-term-memory").isEmpty());
+        assertTrue(out.contains("PRIVACY"), out);
+        assertTrue(out.contains("self-signed") || out.contains("Self signed"), out);
+
+        YamlConfiguration again = load(out);
+        assertEquals(0, ConfigUpdater.merge(again, defaults));
+        assertEquals(out, again.saveToString());
+
+        Logger log = Logger.getLogger("ConfigUpdaterTest");
+        log.setLevel(Level.OFF);
+        Settings s = Settings.load(again, log);
+        assertFalse(s.features().longMemory().enabled());
+        assertEquals(6, s.features().longMemory().extractEveryExchanges());
+        assertEquals(20, s.features().longMemory().maxNotesPerPlayer());
+        assertEquals("sqlite", s.storage().type());
     }
 }

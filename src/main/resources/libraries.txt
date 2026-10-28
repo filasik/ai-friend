@@ -2,3 +2,6 @@
 # by the PluginLoader and put on the plugin classpath: the jar stays small and nothing needs relocating.
 # Cost: the first start needs internet access. Versions come from gradle.properties (filtered by processResources).
 # Everything the server already ships (slf4j, Adventure, Gson, ...) must NOT be listed here.
+org.xerial:sqlite-jdbc:${sqliteVersion}
+org.mariadb.jdbc:mariadb-java-client:${mariadbVersion}
+com.zaxxer:HikariCP:${hikariVersion}

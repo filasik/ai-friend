@@ -1,5 +1,33 @@
 # Changelog
 
+## 2.1.0
+
+Direct API calls and chat intelligence. Existing installs keep working unchanged: the proxy stays the default provider and every new chat feature is off until you switch it on. `config-version` is now 3; the new sections are added to your `config.yml` automatically with comments (backup `config.yml.bak-v<old>`, `-v0` when coming from a 1.x file).
+
+- New: AI providers. Besides the proxy, chat can go straight to OpenAI, Anthropic (Claude), a local Ollama server or any OpenAI-compatible endpoint (OpenRouter, LM Studio, vLLM, ...), with real system and user roles; select with `provider.primary`, configure under `provider.providers.*`, extra named endpoints with `type: custom`
+- New: failover chain (`provider.failover`) with a cooldown for failing providers (`provider.failover-cooldown-seconds`)
+- New: optional cache of answers to identical requests (`provider.cache.*`, in memory)
+- New: personas (`personas.*`), picked per request by world and time of day with weights; the prompt text is yours
+- New: conversation memory (`memory.*`): the last N exchanges are sent as chat history
+- New: rate limits (`limits.*`): cooldown, daily calls and tokens per player and for the whole server; `/aifriend limits` shows what is left; permission `aifriend.bypass-limits` skips them
+- New: cost estimate (`cost.*`): `/aifriend cost` shows token totals and an estimated price, with an optional daily cost warning for admins
+- New: reply filter (`reply-filter.*`): maximum length, banned words (replace or drop the answer), link removal; `§` colour codes and control characters are always removed
+- New: direct questions (`mentions.*`): `/ai <question>`, `@AI Friend question` and `AI Friend, question` in chat, extra trigger names
+- New: per-player opt-out (`opt-out.*`): `/aifriend mute` and `/aifriend unmute`; muted players' chat is never stored or sent
+- New: reactions to game events (`events.*`): death, advancement, first join, Ender Dragon and Wither kills and big explosions, with a global event cooldown
+- New: `/aifriend sleep [minutes]`, `/aifriend wake`, `/aifriend simulate [nocall]` (dry run, nothing is posted) and extended `/aifriend status` (provider, persona, memory, muted players)
+- New: permissions `aifriend.mute`, `aifriend.ask`, `aifriend.sleep`, `aifriend.simulate`, `aifriend.cost`, `aifriend.bypass-limits`
+- New: English and Czech messages for all of the above
+- Change: the prompt is split into a system part (rules, persona) and a user part (chat lines as delimited data) for providers that support roles; the proxy still receives one combined message, as before
+- Change: API keys of all providers are only stored in `config.yml`, are masked in output and are removed from error messages
+- New: long-term memory (`long-term-memory.*`, off by default): every N answered exchanges one extra request asks the model for durable facts players said about themselves (max 3 notes of 120 characters, nothing sensitive; notes that look like e-mail, phone, link or IP are dropped), stores them by player UUID and puts the best ones about the players in the current chat back into later requests as untrusted `{"note":...,"about":...}` data lines. Notes are matched by shared words or, optionally, by embeddings (`long-term-memory.embeddings.*`: OpenAI-compatible `/embeddings`, Ollama `/api/embed`)
+- New: privacy commands `/aifriend memory [player]`, `/aifriend forget [player]` and `/aifriend forget-all`; muting the bot stops collecting notes and (`delete-on-mute`) deletes them; `max-notes-per-player` and `retention-days` with a daily cleanup
+- New: database layer (`storage.*`): SQLite (default, one file) or MariaDB/MySQL (shared between servers), HikariCP, versioned append-only migrations, all access asynchronous; the drivers are downloaded with the other libraries on the first start. Nothing is created unless a feature that needs the database is switched on; if it cannot be opened, one line is logged and only that feature stays off
+- New: public API: asynchronous, cancellable `AiFriendResponseEvent` (change or drop the text before it is posted) and `AiFriendApi` through the Bukkit `ServicesManager` (state, last message, provider, queue, sleep, wake)
+- New: PlaceholderAPI expansion (soft dependency): `%aifriend_state%`, `%aifriend_mood%`, `%aifriend_lastmessage%`, `%aifriend_provider%`, `%aifriend_queued%`, `%aifriend_muted%`, `%aifriend_calls_left%`
+- Change: `/aifriend status` shows the long-term memory state; the startup banner shows the database and schema version when long-term memory is on
+- Not included yet: a Dynmap hook and persistence of cache, limits and cost totals across restarts (see ROADMAP.md)
+
 ## 2.0.0
 
 Full rewrite of the plugin (Java and Gradle instead of Kotlin and Maven). **Breaking:** Paper only, Spigot/Bukkit servers are no longer supported (the 1.x jar stays available on the GitHub releases page), and config keys were renamed (migrated automatically).

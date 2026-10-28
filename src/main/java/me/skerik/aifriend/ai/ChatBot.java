@@ -1,23 +1,57 @@
 package me.skerik.aifriend.ai;
 
 import java.io.IOException;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.IntSupplier;
 import java.util.function.LongSupplier;
+import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import me.skerik.aifriend.Scheduler;
+import me.skerik.aifriend.ai.provider.AiProvider;
+import me.skerik.aifriend.ai.provider.ChatMessage;
+import me.skerik.aifriend.ai.provider.ProviderRequest;
+import me.skerik.aifriend.ai.provider.ProviderResult;
+import me.skerik.aifriend.chat.ConversationMemory;
+import me.skerik.aifriend.chat.CostTracker;
+import me.skerik.aifriend.chat.EventPrompts;
+import me.skerik.aifriend.chat.MentionDetector;
+import me.skerik.aifriend.chat.OptOutStore;
+import me.skerik.aifriend.chat.Persona;
+import me.skerik.aifriend.chat.PersonaSelector;
+import me.skerik.aifriend.chat.RateLimiter;
+import me.skerik.aifriend.chat.ReplyFilter;
+import me.skerik.aifriend.chat.SimulationResult;
+import me.skerik.aifriend.config.ChatFeatures;
 import me.skerik.aifriend.config.Settings;
+import me.skerik.aifriend.longmemory.LongTermMemory;
+import me.skerik.aifriend.storage.PlayerNotesStore;
 import org.jspecify.annotations.Nullable;
 
 /**
- * The chat loop: every {@code interval-seconds} an async timer takes the queued chat lines, asks the AI and hands the
- * answer to the {@link Broadcaster}. Failures never escape the timer; they only stretch the pause (1, 2, 4 ... max 15
- * min). {@link #tick()} is plain synchronous code so it can be tested without a server.
+ * The chat loop. Three things can make the bot talk: the timer (every {@code interval-seconds}, answers the queued chat
+ * lines and event reactions), a direct question (/ai or a mention) and nothing else. All of them go through
+ * {@link #exchange}: build the request (system rules + persona, memory, chat lines), call the provider, account tokens,
+ * parse, filter, post. Failures never escape; they only stretch the pause (1, 2, 4 ... max 15 min).
+ * {@link #tick()} and the direct paths are plain code, testable without a server.
  */
 public final class ChatBot {
 
@@ -27,50 +61,135 @@ public final class ChatBot {
         void say(String botName, String text);
     }
 
+    /** Tells one player (or everybody with a permission) something; keys are message keys, values are plain text. */
+    public interface Notifier {
+        void tell(UUID player, String key, Map<String, String> placeholders);
+
+        void tellPermission(String permission, String key, Map<String, String> placeholders);
+    }
+
+    /** World name and time of day for persona selection (read on the right thread by the plugin). */
+    public record WorldView(String world, long timeTicks) {
+    }
+
     /** What /aifriend status shows. */
     public enum State { RUNNING, DISABLED, NO_KEY, SLEEPING, BACKOFF }
 
-    public record Status(State state, long waitSeconds, int failures, int queued) {
+    public record Status(State state, long waitSeconds, int failures, int queued, String provider, int memoryTurns,
+                         int mutedPlayers, String persona, String longMemory) {
+    }
+
+    public enum MuteResult { DISABLED, DONE, ALREADY }
+
+    /** What caused an answer. */
+    public enum Source { TIMED, DIRECT }
+
+    /**
+     * Last stop before an answer reaches chat (public API event). Return the text to post (it is cleaned and cut again),
+     * or null to post nothing. Runs on an async thread.
+     */
+    @FunctionalInterface
+    public interface ResponseInterceptor {
+        @Nullable String intercept(String botName, String text, @Nullable UUID asker, Source source);
     }
 
     static final long MAX_BACKOFF_SECONDS = 15 * 60;
     /** How many different players must take part before a "sleep" answer is believed. */
     static final int MIN_PLAYERS_FOR_SLEEP = 2;
+    static final int MAX_EVENT_LINES = 5;
+    static final int MAX_PARALLEL_ASKS = 3;
+    static final int EXTRACT_MAX_TOKENS = 300;
+    static final int MAX_PENDING_LINES = 60;
+    static final int MAX_KNOWN_NAMES = 5000;
+
+    /** Everything built from one {@link Settings} snapshot; reused across reloads where the config did not change. */
+    private record Runtime(Settings settings, Optional<AiProvider> provider, PersonaSelector personas,
+                           ConversationMemory memory, RateLimiter limiter, CostTracker cost, ReplyFilter filter,
+                           MentionDetector mentions, EventPrompts events) {
+    }
+
+    /** A request ready to send. */
+    private record Prepared(List<ChatMessage> messages, String userText, String memoryText, @Nullable Persona persona,
+                            int historyTurns) {
+    }
+
+    private record Answer(Reply reply) {
+    }
 
     private final Logger log;
     private final Scheduler scheduler;
-    private final Function<Settings, Transport> transportFactory;
+    private final Function<Settings, Optional<AiProvider>> providerFactory;
     private final Broadcaster broadcaster;
+    private final Notifier notifier;
+    private final Supplier<WorldView> world;
     private final IntSupplier onlinePlayers;
     private final LongSupplier clock;
+    private final OptOutStore optOut;
+    private final ZoneId zone = ZoneId.systemDefault();
     private final ChatBuffer buffer;
+    private final ConcurrentLinkedQueue<String> eventLines = new ConcurrentLinkedQueue<>();
     private final AtomicBoolean busy = new AtomicBoolean();
+    private final AtomicInteger asks = new AtomicInteger();
+    /** Chat name (lower case) to UUID, filled by {@link #onChat}; the {@link ChatLine} record only carries names. */
+    private final ConcurrentHashMap<String, UUID> knownNames = new ConcurrentHashMap<>();
+    /** Chat lines of answered exchanges that long-term memory has not looked at yet. */
+    private final ConcurrentLinkedQueue<ChatLine> pendingNotes = new ConcurrentLinkedQueue<>();
+    private final AtomicInteger answeredExchanges = new AtomicInteger();
+    private final AtomicBoolean extracting = new AtomicBoolean();
+    private volatile @Nullable LongTermMemory longMemory;
 
-    private volatile Settings settings;
-    private volatile Transport transport;
+    private volatile Runtime rt;
     private volatile @Nullable Runnable cancelTimer;
     private volatile long sleepUntil;
     private volatile long retryAt;
     private volatile int failures;
     private volatile String lastReply = "";
+    private volatile ResponseInterceptor interceptor = (bot, text, asker, source) -> text;
 
-    public ChatBot(Logger log, Scheduler scheduler, Function<Settings, Transport> transportFactory,
-                   Broadcaster broadcaster, IntSupplier onlinePlayers, LongSupplier clock, Settings settings) {
+    public ChatBot(Logger log, Scheduler scheduler, Function<Settings, Optional<AiProvider>> providerFactory,
+                   Broadcaster broadcaster, Notifier notifier, Supplier<WorldView> world, IntSupplier onlinePlayers,
+                   LongSupplier clock, OptOutStore optOut, Settings settings) {
         this.log = log;
         this.scheduler = scheduler;
-        this.transportFactory = transportFactory;
+        this.providerFactory = providerFactory;
         this.broadcaster = broadcaster;
+        this.notifier = notifier;
+        this.world = world;
         this.onlinePlayers = onlinePlayers;
         this.clock = clock;
-        this.settings = settings;
-        this.transport = transportFactory.apply(settings);
+        this.optOut = optOut;
         this.buffer = new ChatBuffer(settings.maxQueuedMessages());
+        this.rt = build(settings, null);
+    }
+
+    private Runtime build(Settings s, @Nullable Runtime old) {
+        ChatFeatures f = s.features();
+        ReplyFilter.Config fc = f.replyFilter().enabled() ? f.replyFilter() : f.replyFilter().withMaxLength(s.maxReplyLength());
+        boolean same = old != null;
+        // counters and memory survive a reload when their configuration did not change
+        ConversationMemory memory = same && old.settings.features().memory().equals(f.memory()) ? old.memory : new ConversationMemory(f.memory());
+        RateLimiter limiter = same && old.settings.features().limits().equals(f.limits()) ? old.limiter : new RateLimiter(f.limits(), zone);
+        CostTracker cost = same && old.settings.features().cost().equals(f.cost()) ? old.cost : new CostTracker(f.cost(), zone);
+        EventPrompts events = same && old.settings.features().events().equals(f.events()) ? old.events : new EventPrompts(f.events());
+        return new Runtime(s, providerFactory.apply(s), new PersonaSelector(f.personas()), memory, limiter, cost,
+                new ReplyFilter(fc), new MentionDetector(s.chatbotName(), f.mentions()), events);
+    }
+
+    // ---- lifecycle ----
+
+    public void setInterceptor(ResponseInterceptor interceptor) {
+        this.interceptor = interceptor;
+    }
+
+    /** The last text the bot posted, empty before the first answer. */
+    public String lastMessage() {
+        return lastReply;
     }
 
     /** (Re)starts the timer with the current settings. */
     public synchronized void start() {
         stop();
-        long ticks = settings.intervalSeconds() * 20L;
+        long ticks = rt.settings.intervalSeconds() * 20L;
         cancelTimer = scheduler.runAsyncTimer(this::tick, ticks, ticks);
     }
 
@@ -83,27 +202,73 @@ public final class ChatBot {
 
     /** New settings from a reload: the bot wakes up, forgets failures and restarts its timer. */
     public synchronized void reload(Settings newSettings) {
-        settings = newSettings;
-        transport = transportFactory.apply(newSettings);
         buffer.setCapacity(newSettings.maxQueuedMessages());
+        rt = build(newSettings, rt);
         sleepUntil = 0;
         retryAt = 0;
         failures = 0;
         start();
     }
 
-    /** Called by the chat listener for every public chat message. */
-    public void onChat(String player, String text) {
-        if (!listening()) return;
-        ChatLine line = ChatLine.of(player, text);
-        if (line != null) buffer.add(line);
+    /** Switches long-term memory on (non-null) or off (null); called by the plugin once the database is ready or gone. */
+    public void setLongMemory(@Nullable LongTermMemory memory) {
+        this.longMemory = memory;
+        if (memory == null) pendingNotes.clear();
     }
 
-    /** True while chat lines are worth keeping: bot on, key set, not asleep. */
-    private boolean listening() {
-        Settings s = settings;
-        return s.enabled() && s.hasApiKey() && clock.getAsLong() >= sleepUntil;
+    public @Nullable LongTermMemory longMemory() {
+        return longMemory;
     }
+
+    /** Saves the opt-out list; call on disable. */
+    public void flush() {
+        optOut.flush();
+    }
+
+    // ---- intake ----
+
+    /**
+     * Called by the chat listener for every public chat message (async chat thread).
+     *
+     * @param mayAsk       the player may address the bot directly (aifriend.ask)
+     * @param bypassLimits the player ignores the rate limits (aifriend.bypass-limits)
+     */
+    public void onChat(UUID player, String name, String text, boolean mayAsk, boolean bypassLimits) {
+        Runtime r = rt;
+        if (knownNames.size() > MAX_KNOWN_NAMES) knownNames.clear();
+        knownNames.put(name.toLowerCase(Locale.ROOT), player);
+        if (r.settings.features().optOut().enabled() && optOut.isMuted(player)) return;
+        ChatLine line = ChatLine.of(name, text);
+        boolean buffered = false;
+        if (line != null && listening(r)) {
+            buffer.add(line);
+            buffered = true;
+        }
+        MentionDetector.Config mc = r.settings.features().mentions();
+        if (mayAsk && mc.enabled() && mc.directAnswer()) {
+            // a line that was not buffered (bot asleep) is passed along as the question itself
+            ChatLine extra = buffered ? null : line;
+            r.mentions.detect(text).ifPresent(m -> scheduler.runAsync(() -> runAsk(player, name, bypassLimits, extra)));
+        }
+    }
+
+    /** True while chat lines are worth keeping: bot on, provider usable, not asleep. */
+    private boolean listening(Runtime r) {
+        return r.settings.enabled() && r.provider.isPresent() && clock.getAsLong() >= sleepUntil;
+    }
+
+    /** A game event (death, advancement, ...). May cause an early answer. */
+    public void onEvent(EventPrompts.GameEvent event) {
+        Runtime r = rt;
+        if (!listening(r)) return;
+        r.events.accept(event, Instant.ofEpochMilli(clock.getAsLong())).ifPresent(line -> {
+            eventLines.add(line);
+            while (eventLines.size() > MAX_EVENT_LINES) eventLines.poll();
+            scheduler.runAsync(this::tick);
+        });
+    }
+
+    // ---- timed answer ----
 
     /** One timer run. Never throws. */
     public void tick() {
@@ -119,17 +284,24 @@ public final class ChatBot {
     }
 
     private void run() {
-        Settings s = settings;
+        Runtime r = rt;
+        Settings s = r.settings;
         long now = clock.getAsLong();
-        if (!s.enabled() || !s.hasApiKey() || now < sleepUntil || now < retryAt) return;
+        if (!s.enabled() || r.provider.isEmpty() || now < sleepUntil || now < retryAt) return;
         if (onlinePlayers.getAsInt() == 0) return;
         List<ChatLine> batch = buffer.snapshot();
-        if (batch.isEmpty()) return;
+        List<String> events = new ArrayList<>(eventLines);
+        if (batch.isEmpty() && events.isEmpty()) return;
+        Instant at = Instant.ofEpochMilli(now);
+        if (!r.limiter.tryAcquire(null, at).allowed()) {
+            log.fine("Server-wide AI limit reached; waiting");
+            return;
+        }
 
-        String prompt = PromptBuilder.build(s, batch, lastReply);
-        Reply reply;
+        Prepared p = prepare(r, batch, events, true);
+        Answer answer;
         try {
-            reply = ReplyParser.parse(transport.send(prompt), s.chatbotName(), s.maxReplyLength());
+            answer = call(r, p, null, at);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return;
@@ -141,24 +313,302 @@ public final class ChatBot {
         failures = 0;
         retryAt = 0;
         buffer.remove(batch);
-        switch (reply.action()) {
+        events.forEach(eventLines::remove);
+        switch (answer.reply.action()) {
             case SAY -> {
-                lastReply = reply.text();
-                broadcaster.say(s.chatbotName(), reply.text());
+                if (post(r, answer.reply, p, null, Source.TIMED).isPresent()) afterAnswer(batch);
             }
-            case SLEEP -> maybeSleep(s, batch, now);
+            case SLEEP -> maybeSleep(r, batch, now);
             case NONE -> log.fine("The AI service returned nothing to say");
         }
     }
 
-    private void maybeSleep(Settings s, List<ChatLine> batch, long now) {
+    // ---- direct questions ----
+
+    /**
+     * Answers one player's question (/ai or a mention) on an async task. Everything the player needs to know (limit
+     * reached, bot unavailable, no answer) is sent through the {@link Notifier}; the answer goes to public chat.
+     */
+    public void askCommand(UUID player, String name, String question, boolean bypassLimits) {
+        if (!rt.settings.features().mentions().enabled()) {
+            notifier.tell(player, "command.ask.disabled", Map.of());
+            return;
+        }
+        ChatLine line = ChatLine.of(name, question);
+        scheduler.runAsync(() -> runAsk(player, name, bypassLimits, line));
+    }
+
+    private void runAsk(UUID player, String name, boolean bypassLimits, @Nullable ChatLine extra) {
+        if (asks.incrementAndGet() > MAX_PARALLEL_ASKS) {
+            asks.decrementAndGet();
+            return;
+        }
+        try {
+            Runtime r = rt;
+            long now = clock.getAsLong();
+            Instant at = Instant.ofEpochMilli(now);
+            if (!r.settings.enabled() || r.provider.isEmpty()) {
+                notifier.tell(player, "command.ask.disabled", Map.of());
+                return;
+            }
+            if (r.settings.features().optOut().enabled() && optOut.isMuted(player)) {
+                notifier.tell(player, "command.ask.muted", Map.of());
+                return;
+            }
+            if (now < retryAt) {
+                notifier.tell(player, "command.ask.failed", Map.of());
+                return;
+            }
+            if (!bypassLimits) {
+                RateLimiter.Decision d = r.limiter.tryAcquire(player, at);
+                if (!d.allowed()) {
+                    notifier.tell(player, "command.limit." + d.reason().name().toLowerCase(Locale.ROOT).replace('_', '-'),
+                            durationPlaceholders(d.retryAfter()));
+                    return;
+                }
+            }
+            List<ChatLine> batch = buffer.snapshot();
+            List<ChatLine> lines = new ArrayList<>(batch);
+            if (extra != null) lines.add(extra);
+            if (lines.isEmpty()) {
+                notifier.tell(player, "command.ask.empty", Map.of());
+                return;
+            }
+            Prepared p = prepare(r, lines, List.of(), true);
+            Answer answer;
+            try {
+                answer = call(r, p, player, at);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            } catch (IOException | RuntimeException e) {
+                fail(e, now);
+                notifier.tell(player, "command.ask.failed", Map.of());
+                return;
+            }
+            failures = 0;
+            retryAt = 0;
+            buffer.remove(batch);
+            if (answer.reply.action() != Reply.Action.SAY || post(r, answer.reply, p, player, Source.DIRECT).isEmpty()) {
+                notifier.tell(player, "command.ask.empty", Map.of());
+            } else {
+                afterAnswer(lines);
+            }
+        } finally {
+            asks.decrementAndGet();
+        }
+    }
+
+    private static Map<String, String> durationPlaceholders(Duration d) {
+        long secs = Math.max(0, d.toSeconds());
+        return Map.of("seconds", Long.toString(secs), "hours", Long.toString(secs / 3600),
+                "minutes", Long.toString((secs % 3600 + 59) / 60));
+    }
+
+    // ---- simulate ----
+
+    /** Dry run for /aifriend simulate: nothing is posted, remembered or removed. {@code callProvider} false stops before the request. */
+    public void simulate(boolean callProvider, Consumer<SimulationResult> result) {
+        scheduler.runAsync(() -> result.accept(runSimulate(callProvider)));
+    }
+
+    private SimulationResult runSimulate(boolean callProvider) {
+        Runtime r = rt;
+        long now = clock.getAsLong();
+        Instant at = Instant.ofEpochMilli(now);
+        List<ChatLine> batch = buffer.snapshot();
+        List<String> events = new ArrayList<>(eventLines);
+        Prepared p = prepare(r, batch, events, false);
+        List<SimulationResult.Blocker> blockers = new ArrayList<>();
+        if (!r.settings.enabled()) blockers.add(SimulationResult.Blocker.DISABLED);
+        if (r.provider.isEmpty()) blockers.add(SimulationResult.Blocker.NO_KEY);
+        if (now < sleepUntil) blockers.add(SimulationResult.Blocker.SLEEPING);
+        if (now < retryAt) blockers.add(SimulationResult.Blocker.BACKOFF);
+        if (batch.isEmpty() && events.isEmpty()) blockers.add(SimulationResult.Blocker.NO_CHAT);
+        RateLimiter.Remaining rem = r.limiter.remaining(null, at);
+        if (rem.globalCalls() == 0 || rem.globalTokens() == 0) blockers.add(SimulationResult.Blocker.RATE_LIMITED);
+        String persona = p.persona == null ? null : p.persona.name();
+        if (!callProvider || !blockers.isEmpty()) {
+            return new SimulationResult(persona, p.userText, p.historyTurns, batch.size(), null, null, blockers);
+        }
+        try {
+            Answer a = call(r, p, null, at);
+            String raw = a.reply.action() == Reply.Action.SAY ? a.reply.text()
+                    : a.reply.action() == Reply.Action.SLEEP ? "(sleep)" : null;
+            String filtered = a.reply.action() == Reply.Action.SAY ? r.filter.apply(a.reply.text()).orElse(null) : null;
+            if (a.reply.action() == Reply.Action.SAY && filtered == null) blockers.add(SimulationResult.Blocker.FILTERED_OUT);
+            return new SimulationResult(persona, p.userText, p.historyTurns, batch.size(), raw, filtered, blockers);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return new SimulationResult(persona, p.userText, p.historyTurns, batch.size(), null, null, blockers);
+        } catch (IOException | RuntimeException e) {
+            return new SimulationResult(persona, p.userText, p.historyTurns, batch.size(),
+                    "(request failed: " + e.getClass().getSimpleName() + ")", null, blockers);
+        }
+    }
+
+    // ---- request / response ----
+
+    private Prepared prepare(Runtime r, List<ChatLine> lines, List<String> events, boolean countUse) {
+        WorldView w = world.get();
+        Persona persona = r.personas.select(w.world(), w.timeTicks(), ThreadLocalRandom.current()).orElse(null);
+        List<ChatMessage> messages = new ArrayList<>();
+        messages.add(new ChatMessage(ChatMessage.Role.SYSTEM, PromptBuilder.system(r.settings, persona)));
+        int history = 0;
+        if (r.memory.isActive()) {
+            for (ConversationMemory.Turn t : r.memory.history()) {
+                messages.add(new ChatMessage(t.role() == ConversationMemory.Role.USER ? ChatMessage.Role.USER
+                        : ChatMessage.Role.ASSISTANT, t.text()));
+                history++;
+            }
+        }
+        String previous = r.memory.isActive() ? "" : lastReply;
+        List<PromptBuilder.MemoryNote> notes = recall(lines, countUse);
+        String user = PromptBuilder.user(lines, events, notes, previous);
+        // the conversation history keeps the chat only: remembered notes are fetched fresh for every request
+        String plain = notes.isEmpty() ? user : PromptBuilder.user(lines, events, previous);
+        messages.add(new ChatMessage(ChatMessage.Role.USER, user));
+        return new Prepared(messages, user, plain, persona, history);
+    }
+
+    /** Long-term notes about the players in this batch, as untrusted data lines. Blocking (async thread); empty when off or on any error. */
+    private List<PromptBuilder.MemoryNote> recall(List<ChatLine> lines, boolean countUse) {
+        LongTermMemory ltm = longMemory;
+        if (ltm == null || !ltm.config().enabled()) return List.of();
+        Map<UUID, String> who = new LinkedHashMap<>();
+        for (ChatLine line : lines) {
+            UUID id = knownNames.get(line.player().toLowerCase(Locale.ROOT));
+            if (id != null && !isMuted(id)) who.putIfAbsent(id, line.player());
+        }
+        if (who.isEmpty()) return List.of();
+        StringBuilder query = new StringBuilder();
+        for (ChatLine line : lines) query.append(line.text()).append(' ');
+        List<PromptBuilder.MemoryNote> out = new ArrayList<>();
+        for (PlayerNotesStore.Note n : ltm.retrieve(who.keySet(), query.toString().strip(), countUse)) {
+            out.add(new PromptBuilder.MemoryNote(who.getOrDefault(n.player(), n.playerName()), n.text()));
+        }
+        return out;
+    }
+
+    // ---- long-term memory: collecting notes ----
+
+    /** Called after an answer was posted: counts the exchange and, every N-th time, extracts notes in the background. */
+    private void afterAnswer(List<ChatLine> lines) {
+        LongTermMemory ltm = longMemory;
+        if (ltm == null || !ltm.config().enabled()) return;
+        for (ChatLine line : lines) {
+            UUID id = knownNames.get(line.player().toLowerCase(Locale.ROOT));
+            if (id != null && !isMuted(id)) pendingNotes.add(line);
+        }
+        while (pendingNotes.size() > MAX_PENDING_LINES) pendingNotes.poll();
+        if (answeredExchanges.incrementAndGet() % ltm.config().extractEveryExchanges() == 0) {
+            scheduler.runAsync(() -> extractNotes(ltm));
+        }
+    }
+
+    /**
+     * One extraction call: same provider chain, global rate limit and cost tracking as any other call. Skipped (the
+     * lines stay queued for the next round) when the bot is off, asleep, in backoff or rate limited. Never throws and
+     * never touches the answering state, so a failure here cannot slow the bot down.
+     */
+    private void extractNotes(LongTermMemory ltm) {
+        if (!extracting.compareAndSet(false, true)) return;
+        try {
+            Runtime r = rt;
+            long now = clock.getAsLong();
+            if (!r.settings.enabled() || r.provider.isEmpty() || now < sleepUntil || now < retryAt) return;
+            Instant at = Instant.ofEpochMilli(now);
+            if (!r.limiter.tryAcquire(null, at).allowed()) {
+                log.fine("Long-term memory: server-wide AI limit reached; extraction skipped");
+                return;
+            }
+            List<ChatLine> lines = new ArrayList<>();
+            ChatLine line;
+            while ((line = pendingNotes.poll()) != null) {
+                UUID id = knownNames.get(line.player().toLowerCase(Locale.ROOT));
+                if (id != null && !isMuted(id)) lines.add(line);
+            }
+            if (lines.isEmpty()) return;
+            Map<String, String> names = new LinkedHashMap<>();
+            for (ChatLine l : lines) names.putIfAbsent(l.player().toLowerCase(Locale.ROOT), l.player());
+            ProviderResult res = complete(r, NoteExtractor.messages(lines), EXTRACT_MAX_TOKENS, true, null, at);
+            for (NoteExtractor.Candidate c : NoteExtractor.parse(res.text(), names)) {
+                UUID id = knownNames.get(c.player().toLowerCase(Locale.ROOT));
+                if (id == null || isMuted(id)) continue;
+                ltm.remember(id, c.player(), c.note());
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } catch (IOException | RuntimeException e) {
+            log.warning("Long-term memory: note extraction failed (" + e.getClass().getSimpleName()
+                    + (e.getMessage() == null ? "" : ": " + e.getMessage()) + ")");
+        } finally {
+            extracting.set(false);
+        }
+    }
+
+    /** Sends the request, accounts the tokens (limits, cost) and parses the answer. Blocking. */
+    private Answer call(Runtime r, Prepared p, @Nullable UUID asker, Instant at) throws IOException, InterruptedException {
+        ProviderResult res = complete(r, p.messages, r.settings.provider().maxOutputTokens(), true, asker, at);
+        return new Answer(ReplyParser.parse(res.text(), r.settings.chatbotName(), r.settings.maxReplyLength()));
+    }
+
+    /** One provider request with token accounting (rate limiter, cost tracker). Blocking. */
+    private ProviderResult complete(Runtime r, List<ChatMessage> messages, int maxOutputTokens, boolean json,
+                                    @Nullable UUID asker, Instant at) throws IOException, InterruptedException {
+        AiProvider provider = r.provider.orElseThrow();
+        ProviderResult res = provider.complete(new ProviderRequest(messages, maxOutputTokens, json));
+        int in = res.inputTokens();
+        int out = res.outputTokens();
+        if (in == 0 && out == 0) {
+            in = messages.stream().mapToInt(m -> SimulationResult.estimateTokens(m.content())).sum();
+            out = SimulationResult.estimateTokens(res.text());
+        }
+        r.limiter.recordUsage(asker, (long) in + out, at);
+        if (r.cost.record(in, out, at)) {
+            CostTracker.Totals t = r.cost.totals(at);
+            notifier.tellPermission("aifriend.cost", "command.cost.warning", Map.of(
+                    "cost", String.format(Locale.ROOT, "%.2f", t.todayCost()),
+                    "warn", String.format(Locale.ROOT, "%.2f", t.warnDailyCost())));
+        }
+        return res;
+    }
+
+    /** Filters and posts a SAY answer, remembers what was really posted. Returns the posted text. */
+    private Optional<String> post(Runtime r, Reply reply, Prepared p, @Nullable UUID asker, Source source) {
+        Optional<String> filtered = r.filter.apply(reply.text());
+        if (filtered.isEmpty()) {
+            log.fine("The reply filter removed the whole answer");
+            return filtered;
+        }
+        String name = r.settings.chatbotName();
+        String changed;
+        try {
+            changed = interceptor.intercept(name, filtered.get(), asker, source);
+        } catch (RuntimeException e) {
+            log.log(Level.WARNING, "A response listener failed; posting the original answer", e);
+            changed = filtered.get();
+        }
+        // a listener may have replaced the text: clean and cut it again, it is still going to public chat
+        Optional<String> result = changed == null ? Optional.empty()
+                : Optional.of(Text.cut(Text.singleLine(changed), r.settings.maxReplyLength())).filter(t -> !t.isEmpty());
+        if (result.isEmpty()) return result;
+        String text = result.get();
+        lastReply = text;
+        // the history shows the model its own answers in the format it must keep using (plain text here makes JSON mode drift)
+        if (r.memory.isActive()) r.memory.add(p.memoryText, Reply.asJson(text));
+        broadcaster.say(name, text);
+        return result;
+    }
+
+    private void maybeSleep(Runtime r, List<ChatLine> batch, long now) {
+        Settings s = r.settings;
         int needed = Math.min(MIN_PLAYERS_FOR_SLEEP, Math.max(1, onlinePlayers.getAsInt()));
         if (!s.stopWhenIgnored() || distinctPlayers(batch) < needed) {
             log.fine("Ignored a request to stay quiet (not enough different players in the chat)");
             return;
         }
-        sleepUntil = now + s.sleepMinutes() * 60_000L;
-        buffer.clear();
+        sleep(Duration.ofMinutes(s.sleepMinutes()));
         log.info("Players are not interested in talking to the bot; staying quiet for " + s.sleepMinutes() + " minutes.");
     }
 
@@ -175,9 +625,8 @@ public final class ChatBot {
         retryAt = now + wait * 1000;
         String why;
         if (e instanceof ApiException api && api.status() == 401) {
-            why = "HTTP 401, the api-key was rejected" + (settings.apiKey().equals("trial")
-                    ? " (the trial has probably expired; get a key at https://platform.openai.com/signup)"
-                    : "; check api-key in config.yml");
+            why = "HTTP 401, the api-key was rejected; check the key of the provider in config.yml"
+                    + (rt.settings.apiKey().equals("trial") ? " (the trial has probably expired)" : "");
         } else {
             why = e.getClass().getSimpleName() + (e.getMessage() == null ? "" : ": " + e.getMessage());
         }
@@ -194,14 +643,78 @@ public final class ChatBot {
         return seconds % 60 == 0 ? (seconds / 60) + " min" : seconds + " s";
     }
 
+    // ---- admin / player actions ----
+
+    /** Quiet for the given time: chat is not collected, the queue is dropped. */
+    public void sleep(Duration duration) {
+        sleepUntil = clock.getAsLong() + duration.toMillis();
+        buffer.clear();
+        eventLines.clear();
+    }
+
+    /** @return false when the bot was not sleeping */
+    public boolean wake() {
+        boolean was = clock.getAsLong() < sleepUntil;
+        sleepUntil = 0;
+        return was;
+    }
+
+    public boolean isMuted(UUID player) {
+        return rt.settings.features().optOut().enabled() && optOut.isMuted(player);
+    }
+
+    public MuteResult mute(UUID player, String name) {
+        if (!rt.settings.features().optOut().enabled()) return MuteResult.DISABLED;
+        if (!optOut.setMuted(player, true)) return MuteResult.ALREADY;
+        buffer.removeFrom(name);
+        pendingNotes.removeIf(l -> l.player().equalsIgnoreCase(name));
+        LongTermMemory ltm = longMemory;
+        if (ltm != null && ltm.config().deleteOnMute()) {
+            ltm.forget(player).exceptionally(e -> {
+                log.warning("Long-term memory: cannot delete the notes of a muted player (" + e.getClass().getSimpleName() + ")");
+                return 0;
+            });
+        }
+        scheduler.runAsync(optOut::flush);
+        return MuteResult.DONE;
+    }
+
+    public MuteResult unmute(UUID player) {
+        if (!rt.settings.features().optOut().enabled()) return MuteResult.DISABLED;
+        if (!optOut.setMuted(player, false)) return MuteResult.ALREADY;
+        scheduler.runAsync(optOut::flush);
+        return MuteResult.DONE;
+    }
+
+    // ---- read-only views ----
+
+    public CostTracker.Totals costTotals() {
+        return rt.cost.totals(Instant.ofEpochMilli(clock.getAsLong()));
+    }
+
+    public boolean costEnabled() {
+        return rt.settings.features().cost().enabled();
+    }
+
+    public RateLimiter.Remaining remaining(UUID player) {
+        return rt.limiter.remaining(player, Instant.ofEpochMilli(clock.getAsLong()));
+    }
+
+    private String longMemoryText() {
+        LongTermMemory ltm = longMemory;
+        if (ltm != null) return "on, " + ltm.mode();
+        return rt.settings.features().longMemory().enabled() ? "enabled but the database is not available" : "off";
+    }
+
     public Status status() {
-        Settings s = settings;
+        Runtime r = rt;
+        Settings s = r.settings;
         long now = clock.getAsLong();
         State state;
         long wait = 0;
         if (!s.enabled()) {
             state = State.DISABLED;
-        } else if (!s.hasApiKey()) {
+        } else if (r.provider.isEmpty()) {
             state = State.NO_KEY;
         } else if (now < sleepUntil) {
             state = State.SLEEPING;
@@ -212,6 +725,8 @@ public final class ChatBot {
         } else {
             state = State.RUNNING;
         }
-        return new Status(state, wait, failures, buffer.size());
+        String persona = !s.features().personas().enabled() ? "-" : s.features().personas().personas().size() + " configured";
+        return new Status(state, wait, failures, buffer.size(), r.provider.map(AiProvider::id).orElse("-"),
+                r.memory.size(), optOut.mutedCount(), persona, longMemoryText());
     }
 }

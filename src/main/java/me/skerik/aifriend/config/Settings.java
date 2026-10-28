@@ -1,8 +1,12 @@
 package me.skerik.aifriend.config;
 
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Locale;
 import java.util.logging.Logger;
+import me.skerik.aifriend.ai.provider.ProviderSettings;
+import me.skerik.aifriend.storage.DbConfig;
+import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 
 /**
@@ -13,8 +17,36 @@ public record Settings(
         String locale, boolean updateCheck, boolean metrics, List<String> aliases,
         boolean enabled, String apiKey, String model, String chatbotName, String language, String personalization,
         int intervalSeconds, boolean stopWhenIgnored, int sleepMinutes,
-        int maxQueuedMessages, int maxReplyLength, int connectTimeoutSeconds, int readTimeoutSeconds
+        int maxQueuedMessages, int maxReplyLength, int connectTimeoutSeconds, int readTimeoutSeconds,
+        ProviderSettings provider, ChatFeatures features, Storage storage
 ) {
+
+    /** The shared {@code storage:} section (used by every feature that keeps data in a database). */
+    public record Storage(String type, String sqliteFile, int sqlitePool, String host, int port, String database,
+                          String user, String password, int poolSize, String sslMode) {
+
+        public static final String DEFAULT_FILE = "ai-friend.db";
+
+        public boolean mariadb() {
+            return type.equals("mariadb");
+        }
+
+        public DbConfig dbConfig(Path dataFolder) {
+            if (mariadb()) {
+                return new DbConfig(DbConfig.Dialect.MARIADB, null, host, port, database, user, password, poolSize, sslMode);
+            }
+            return DbConfig.sqlite(dataFolder.resolve(sqliteFile), sqlitePool);
+        }
+
+        /** Short text for the banner and /aifriend status, never contains the password. */
+        public String describe() {
+            return mariadb() ? "MariaDB " + host + ":" + port + "/" + database : "SQLite " + sqliteFile;
+        }
+
+        public static Storage defaults() {
+            return new Storage("sqlite", DEFAULT_FILE, 3, "localhost", 3306, "aifriend", "aifriend", "", 6, "");
+        }
+    }
 
     public static final String KEY_PLACEHOLDER = "your_openai_api_key_here";
 
@@ -36,8 +68,35 @@ public record Settings(
                 bounded(c, "max-queued-messages", 5, 500, 50, log),
                 bounded(c, "max-reply-length", 20, 1000, 256, log),
                 bounded(c, "http.connect-timeout-seconds", 1, 120, 10, log),
-                bounded(c, "http.read-timeout-seconds", 1, 120, 30, log)
+                bounded(c, "http.read-timeout-seconds", 1, 120, 30, log),
+                ProviderSettings.load(c.getConfigurationSection("provider"), log),
+                ChatFeatures.load(c, log),
+                storage(c, log)
         );
+    }
+
+    private static Storage storage(FileConfiguration c, Logger log) {
+        String type = c.getString("storage.type", "sqlite").toLowerCase(Locale.ROOT).strip();
+        if (type.equals("mysql")) type = "mariadb"; // same driver and dialect
+        if (!type.equals("sqlite") && !type.equals("mariadb")) {
+            log.warning("storage.type must be sqlite or mariadb; using sqlite");
+            type = "sqlite";
+        }
+        String file = c.getString("storage.sqlite.file", Storage.DEFAULT_FILE).strip();
+        if (file.isEmpty() || file.contains("/") || file.contains("\\") || file.contains("..")) {
+            log.warning("storage.sqlite.file must be a plain file name inside the plugin folder; using " + Storage.DEFAULT_FILE);
+            file = Storage.DEFAULT_FILE;
+        }
+        ConfigurationSection m = c.getConfigurationSection("storage.mariadb");
+        return new Storage(type, file,
+                bounded(c, "storage.sqlite.pool-size", 1, 32, 3, log),
+                m == null ? "localhost" : m.getString("host", "localhost").strip(),
+                m == null ? 3306 : bounded(c, "storage.mariadb.port", 1, 65535, 3306, log),
+                m == null ? "aifriend" : m.getString("database", "aifriend").strip(),
+                m == null ? "aifriend" : m.getString("user", "aifriend").strip(),
+                m == null ? "" : m.getString("password", ""),
+                m == null ? 6 : bounded(c, "storage.mariadb.pool-size", 1, 64, 6, log),
+                m == null ? "" : m.getString("ssl-mode", "").strip());
     }
 
     /** True when the admin has put a key in (the shipped placeholder and an empty value mean "not set"). */
@@ -47,10 +106,27 @@ public record Settings(
 
     /** The key for status output: never the whole secret. {@code trial} is not a secret. */
     public String maskedKey() {
-        if (!hasApiKey()) return "-";
-        if (apiKey.equals("trial")) return "trial";
-        if (apiKey.length() <= 10) return "****";
-        return apiKey.substring(0, 3) + "..." + apiKey.substring(apiKey.length() - 4);
+        return mask(hasApiKey() ? apiKey : "");
+    }
+
+    /** Masked key of the provider that answers: the top-level api-key for the proxy, else the provider's own key. */
+    public String activeMaskedKey() {
+        ProviderSettings.Entry primary = provider.providers().get(provider.primary());
+        if (primary == null || primary.type() == ProviderSettings.Type.PROXY) return maskedKey();
+        return ProviderSettings.isUnset(primary.apiKey()) ? "-" : mask(primary.apiKey());
+    }
+
+    /** Model of the provider that answers (the top-level model for the proxy). */
+    public String activeModel() {
+        ProviderSettings.Entry primary = provider.providers().get(provider.primary());
+        return primary == null || primary.type() == ProviderSettings.Type.PROXY || primary.model().isEmpty() ? model : primary.model();
+    }
+
+    static String mask(String key) {
+        if (key.isEmpty()) return "-";
+        if (key.equals("trial")) return "trial";
+        if (key.length() <= 10) return "****";
+        return key.substring(0, 3) + "..." + key.substring(key.length() - 4);
     }
 
     /** A non-blank text option; a blank value is logged and replaced by the default. */

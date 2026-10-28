@@ -49,6 +49,16 @@ public final class ChatBuffer {
         }
     }
 
+    /** Drops everything one player wrote (used when the player mutes the bot). */
+    public void removeFrom(String player) {
+        for (var it = queue.iterator(); it.hasNext(); ) {
+            if (it.next().player().equals(player)) {
+                it.remove();
+                size.decrementAndGet();
+            }
+        }
+    }
+
     public void clear() {
         queue.clear();
         size.set(0);

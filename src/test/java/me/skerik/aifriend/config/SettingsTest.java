@@ -59,7 +59,33 @@ class SettingsTest {
 
     @Test
     void emptyConfigGivesTheSameDefaults() throws Exception {
-        assertEquals(Settings.load(bundled(), LOG), Settings.load(new YamlConfiguration(), LOG));
+        Settings shipped = Settings.load(bundled(), LOG);
+        Settings empty = Settings.load(new YamlConfiguration(), LOG);
+        assertEquals(empty.provider(), shipped.provider());
+        ChatFeatures a = shipped.features();
+        ChatFeatures b = empty.features();
+        // the shipped file carries example values (two personas, prices, limits), all features switched off
+        assertEquals(b.personas().enabled(), a.personas().enabled());
+        assertEquals(2, a.personas().personas().size());
+        assertFalse(a.memory().enabled(), "memory must be off in the shipped config");
+        assertEquals(b.memory().enabled(), a.memory().enabled());
+        assertFalse(a.limits().enabled(), "limits must be off in the shipped config");
+        assertEquals(b.limits().enabled(), a.limits().enabled());
+        assertFalse(a.cost().enabled(), "cost must be off in the shipped config");
+        assertEquals(b.cost().enabled(), a.cost().enabled());
+        assertFalse(a.replyFilter().enabled(), "replyFilter must be off in the shipped config");
+        assertEquals(b.replyFilter().enabled(), a.replyFilter().enabled());
+        assertFalse(a.mentions().enabled(), "mentions must be off in the shipped config");
+        assertEquals(b.mentions().enabled(), a.mentions().enabled());
+        assertFalse(a.optOut().enabled(), "optOut must be off in the shipped config");
+        assertEquals(b.optOut().enabled(), a.optOut().enabled());
+        assertFalse(a.events().enabled(), "events must be off in the shipped config");
+        assertEquals(b.events().enabled(), a.events().enabled());
+        assertEquals(empty.intervalSeconds(), shipped.intervalSeconds());
+        assertEquals(empty.model(), shipped.model());
+        assertEquals(empty.chatbotName(), shipped.chatbotName());
+        assertEquals(empty.maxReplyLength(), shipped.maxReplyLength());
+        assertEquals(empty.apiKey(), shipped.apiKey());
     }
 
     @Test
@@ -106,5 +132,47 @@ class SettingsTest {
         assertEquals("****", with("api-key", "sk-short").maskedKey());
         assertEquals("****", with("api-key", "0123456789").maskedKey());
         assertEquals("012...7890", with("api-key", "01234567890").maskedKey());
+    }
+
+    @Test
+    void storageAndLongTermMemoryDefaults() throws Exception {
+        Settings s = Settings.load(bundled(), LOG);
+        assertEquals("sqlite", s.storage().type());
+        assertEquals("ai-friend.db", s.storage().sqliteFile());
+        assertEquals(3, s.storage().sqlitePool());
+        assertEquals(3306, s.storage().port());
+        var lm = s.features().longMemory();
+        assertFalse(lm.enabled());
+        assertEquals(6, lm.extractEveryExchanges());
+        assertEquals(20, lm.maxNotesPerPlayer());
+        assertEquals(0, lm.retentionDays());
+        assertEquals(5, lm.retrievalTopK());
+        assertTrue(lm.deleteOnMute());
+        assertEquals("none", lm.embeddings().backend());
+        assertEquals(s.features().longMemory(), me.skerik.aifriend.longmemory.LongTermMemory.Config.defaults());
+        assertEquals("change-me", s.storage().password()); // the shipped example password
+    }
+
+    @Test
+    void storageValuesAreValidatedWithFallback() throws Exception {
+        assertEquals("mariadb", with("storage.type", "MySQL").storage().type());
+        assertEquals("sqlite", with("storage.type", "oracle").storage().type());
+        assertEquals("ai-friend.db", with("storage.sqlite.file", "../evil.db").storage().sqliteFile());
+        assertEquals("ai-friend.db", with("storage.sqlite.file", "a/b.db").storage().sqliteFile());
+        assertEquals("x.db", with("storage.sqlite.file", "x.db").storage().sqliteFile());
+        assertEquals(3306, with("storage.mariadb.port", 0).storage().port());
+        Settings m = with("storage.type", "mariadb");
+        assertTrue(m.storage().dbConfig(java.nio.file.Path.of("x")).dialect() == me.skerik.aifriend.storage.DbConfig.Dialect.MARIADB);
+        assertFalse(m.storage().describe().contains("change-me"));
+    }
+
+    @Test
+    void longTermMemoryValuesAreValidatedWithFallback() throws Exception {
+        assertEquals(6, with("long-term-memory.extract-every-exchanges", 0).features().longMemory().extractEveryExchanges());
+        assertEquals(20, with("long-term-memory.max-notes-per-player", 9999).features().longMemory().maxNotesPerPlayer());
+        assertEquals(5, with("long-term-memory.retrieval-top-k", -1).features().longMemory().retrievalTopK());
+        assertEquals(30, with("long-term-memory.retention-days", 30).features().longMemory().retentionDays());
+        assertEquals("openai", with("long-term-memory.embeddings.backend", " OpenAI ").features().longMemory().embeddings().backend());
+        assertEquals("", with("long-term-memory.embeddings.base-url", "ftp://x").features().longMemory().embeddings().baseUrl());
     }
 }

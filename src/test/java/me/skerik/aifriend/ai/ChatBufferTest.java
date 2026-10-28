@@ -55,6 +55,22 @@ class ChatBufferTest {
     }
 
     @Test
+    void removeFromDropsOnlyThatPlayersLines() {
+        ChatBuffer b = new ChatBuffer(10);
+        b.add(new ChatLine("Steve", "a"));
+        b.add(new ChatLine("Alex", "b"));
+        b.add(new ChatLine("Steve", "c"));
+        b.removeFrom("Steve");
+        assertEquals(List.of(new ChatLine("Alex", "b")), b.snapshot());
+        assertEquals(1, b.size());
+        b.removeFrom("nobody");
+        b.removeFrom("steve"); // names are case sensitive
+        assertEquals(1, b.size());
+        b.add(new ChatLine("Steve", "d"));
+        assertEquals(2, b.size());
+    }
+
+    @Test
     void clearEmptiesTheBuffer() {
         ChatBuffer b = new ChatBuffer(5);
         b.add(line(1));

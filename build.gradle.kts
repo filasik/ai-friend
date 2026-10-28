@@ -11,14 +11,24 @@ version = property("pluginVersion") as String
 repositories {
     mavenCentral()
     maven("https://repo.papermc.io/repository/maven-public/")
+    // PlaceholderAPI (soft dependency, compile only)
+    maven("https://repo.extendedclip.com/releases/") {
+        content { includeGroup("me.clip") }
+    }
 }
 
 dependencies {
     compileOnly("io.papermc.paper:paper-api:${property("paperApiVersion")}")
+    compileOnly("me.clip:placeholderapi:${property("placeholderApiVersion")}")
+    // Resolved at runtime by the PluginLoader (src/main/resources/libraries.txt), not shaded
+    compileOnly("com.zaxxer:HikariCP:${property("hikariVersion")}")
     // The only shaded library (relocated, as bStats requires); everything else is resolved at runtime
     implementation("org.bstats:bstats-bukkit:${property("bstatsVersion")}")
 
     testImplementation("io.papermc.paper:paper-api:${property("paperApiVersion")}")
+    testImplementation("org.xerial:sqlite-jdbc:${property("sqliteVersion")}")
+    testImplementation("com.zaxxer:HikariCP:${property("hikariVersion")}")
+    testImplementation("org.slf4j:slf4j-simple:2.0.17")
     testImplementation(platform("org.junit:junit-bom:6.1.3"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
@@ -54,6 +64,9 @@ tasks.processResources {
         "website" to project.property("pluginWebsite"),
         "apiVersion" to project.property("apiVersion"),
         "bstatsId" to project.property("bstatsId"),
+        "sqliteVersion" to project.property("sqliteVersion"),
+        "mariadbVersion" to project.property("mariadbVersion"),
+        "hikariVersion" to project.property("hikariVersion"),
     )
     inputs.properties(props)
     filesMatching(listOf("paper-plugin.yml", "libraries.txt", "build.properties")) { expand(props) }

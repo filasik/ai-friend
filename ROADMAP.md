@@ -48,7 +48,7 @@ Cíl: plugin nepadá, nezamrzá a neuniká z něj nic citlivého.
 
 ### 1.7 Důvěrnost
 - ✅ Zdokumentovat v README, že požadavky jdou přes `gpt.netuj.eu`, a co se tam ukládá.
-- ⬜ Volitelný režim přímého volání OpenAI s vlastním klíčem (viz Fáze 4).
+- ✅ Volitelný přímý režim (OpenAI, Anthropic, Ollama, vlastní endpoint) od 2.1.0; hráčský text je tam v samostatné roli.
 
 ---
 
@@ -66,29 +66,31 @@ Cíl: plugin nepadá, nezamrzá a neuniká z něj nic citlivého.
 
 ## Fáze 3 – Základní nové funkce (nejlepší poměr užitečnost/práce)
 
-- ⬜ **Oslovení bota** (`@AI Friend` / jménem) a příkaz `/ai <dotaz>` pro přímou otázku.
-- ⬜ **Reakce na události**: smrt hráče, achievement, první join, Ender Dragon / Wither, výbuch.
-- ⬜ **Persony** v configu (pirát, rytíř, sarkastický robot, moudrý stařec, Creeper…), případně dle denní doby či světa.
-- ⬜ **Per-hráč opt-out**: `/aifriend mute` a `unmute` (bez vypnutí bota všem).
-- ⬜ **Cooldown a rate limit** pro hráče + denní limit volání/tokenů.
-- ⬜ **Filtr odpovědí**: max. délka natvrdo, odstranění `§` kódů, zakázaná slova.
-- ⬜ **Dynamická doba spánku** (`sleep_minutes`) a příkaz `/aifriend sleep|wake|status`.
-- ⬜ **Testovací režim**: `/aifriend simulate` ukáže odpověď bez odeslání do chatu.
-- ⬜ **Náklady**: `/aifriend cost` + upozornění při překročení limitu.
-- ⬜ **Paměť konverzace**: posledních N výměn jako chat historie místo jediného `lastMessage`.
+- ✅ **Oslovení bota** (`@AI Friend` / jménem) a příkaz `/ai <dotaz>` pro přímou otázku.
+- ✅ **Reakce na události**: smrt hráče, achievement, první join, Ender Dragon / Wither, výbuch.
+- ✅ **Persony** v configu (pirát, rytíř, sarkastický robot, moudrý stařec, Creeper…), případně dle denní doby či světa.
+- ✅ **Per-hráč opt-out**: `/aifriend mute` a `unmute` (bez vypnutí bota všem).
+- ✅ **Cooldown a rate limit** pro hráče + denní limit volání/tokenů.
+- ✅ **Filtr odpovědí**: max. délka natvrdo, odstranění `§` kódů, zakázaná slova.
+- ✅ **Dynamická doba spánku** (`sleep_minutes`) a příkaz `/aifriend sleep|wake|status`.
+- ✅ **Testovací režim**: `/aifriend simulate` ukáže odpověď bez odeslání do chatu.
+- ✅ **Náklady**: `/aifriend cost` + upozornění při překročení limitu.
+- ✅ **Paměť konverzace**: posledních N výměn jako chat historie místo jediného `lastMessage`.
 - ✅ **Lokalizace hlášek** pluginu (`messages.yml`).
 
 ---
 
 ## Fáze 4 – Poskytovatelé a technické rozšíření
 
-- ⬜ Abstrakce `AiProvider` (OpenAI přímo, Anthropic, Deepseek, Openrouter, Ollama / lokální modely, vlastní endpoint).
-- ⬜ Failover mezi poskytovateli.
-- ⬜ Cache odpovědí na opakované otázky.
-- ⬜ Dlouhodobá paměť (SQLite + embeddings), bot si pamatuje hráče a jejich historii.
-- ⬜ Veřejné API a eventy (`AiFriendResponseEvent`) pro ostatní pluginy.
-- 🔧 bStats (zapojeno ze šablony; chybí registrace na bstats.org a `bstatsId`).
-- ⬜ PlaceholderAPI (`%aifriend_mood%`, `%aifriend_lastmessage%`).
+Verze 2.1.0 (Fáze 3 a 4). Přímé volání OpenAI a Anthropic je zatím ověřené jen proti lokálním testovacím serverům; živě je vyzkoušený OpenAI-kompatibilní endpoint (DeepSeek) a SQLite.
+
+- ✅ Abstrakce `AiProvider` (OpenAI přímo, Anthropic, Deepseek, Openrouter, Ollama / lokální modely, vlastní endpoint).
+- ✅ Failover mezi poskytovateli.
+- ✅ Cache odpovědí (v paměti, ve výchozím stavu vypnutá; pro chat je shoda zřídka).
+- ✅ Dlouhodobá paměť (SQLite nebo MariaDB/MySQL, embeddings přes OpenAI/Ollama/vlastní endpoint, jinak klíčová slova): bot si pamatuje krátké poznámky o hráčích, `/aifriend memory|forget|forget-all`, retence a limit poznámek. Ve výchozím stavu vypnuté; MariaDB zatím neotestována na živém serveru.
+- ✅ Veřejné API a eventy: `AiFriendResponseEvent` (asynchronní, zrušitelný, lze změnit text) a `AiFriendApi` přes Bukkit ServicesManager.
+- ✅ bStats (`bstatsId` 34987).
+- ✅ PlaceholderAPI (volitelná závislost): `%aifriend_state%`, `%aifriend_mood%`, `%aifriend_lastmessage%`, `%aifriend_provider%`, `%aifriend_queued%`, `%aifriend_muted%`, `%aifriend_calls_left%`. `mood` je zatím odvozená ze stavu bota (happy/sleepy/confused/off), skutečná nálada patří do Fáze 5.
 
 ---
 
