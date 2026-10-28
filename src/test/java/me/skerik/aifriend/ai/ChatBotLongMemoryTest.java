@@ -102,6 +102,7 @@ class ChatBotLongMemoryTest {
     private final List<ProviderRequest> extractions = new ArrayList<>();
     private final List<String> said = new ArrayList<>();
     private boolean provider2Fails;
+    private String answerText = SAY;
     private Extraction extraction = r -> "{\"notes\":[]}";
     private Embedder embedder;
     private Database db;
@@ -123,7 +124,7 @@ class ChatBotLongMemoryTest {
             }
             if (provider2Fails) throw new IOException("boom");
             answers.add(request);
-            return new ProviderResult(SAY, 0, 0, "fake");
+            return new ProviderResult(answerText, 0, 0, "fake");
         }
     };
 
@@ -228,6 +229,18 @@ class ChatBotLongMemoryTest {
         exchange("Steve", "third");
         exchange("Steve", "fourth");
         assertEquals(2, extractions.size());
+    }
+
+    @Test
+    void exchangesTheBotStayedQuietAboutAreStillNoted() {
+        start(2);
+        answerText = "{\"action\":\"skip\"}";
+        extraction = r -> notesJson("Steve", "Builds a medieval castle");
+        exchange("Steve", "I am building a castle");
+        exchange("Steve", "castle is almost done");
+        assertTrue(said.isEmpty(), "the bot said nothing");
+        assertEquals(1, extractions.size());
+        assertEquals(List.of("Builds a medieval castle"), stored("Steve"));
     }
 
     @Test

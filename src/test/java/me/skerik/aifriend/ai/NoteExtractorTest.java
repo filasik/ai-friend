@@ -68,4 +68,15 @@ class NoteExtractorTest {
         assertEquals(1, user.split("</chat_log>", -1).length - 1, user); // the player's closing tag was escaped
         assertTrue(user.contains("Steve"));
     }
+
+    @Test
+    void anAnswerCutOffByTheOutputLimitKeepsTheCompleteNotes() {
+        String cut = "{\"notes\":[{\"player\":\"Steve\",\"note\":\"Staví hrad v džungli\"},{\"player\":\"Alex\",\"note\":\"Má rád redst";
+        List<NoteExtractor.Candidate> out = NoteExtractor.parse(cut, NAMES);
+        assertEquals(1, out.size());
+        assertEquals("Staví hrad v džungli", out.getFirst().note());
+        assertTrue(NoteExtractor.unexpectedlyEmpty("I cannot do that"));
+        assertFalse(NoteExtractor.unexpectedlyEmpty("{\"notes\": []}"));
+        assertFalse(NoteExtractor.unexpectedlyEmpty(""));
+    }
 }

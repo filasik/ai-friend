@@ -32,6 +32,8 @@ public final class AnthropicProvider implements AiProvider {
         this.http = new HttpSupport(options, apiKey);
     }
 
+    private static final int RETRY_MAX_TOKENS = 4000;
+
     @Override
     public String id() {
         return "anthropic";
@@ -39,6 +41,10 @@ public final class AnthropicProvider implements AiProvider {
 
     @Override
     public ProviderResult complete(ProviderRequest request) throws IOException, InterruptedException {
+        return complete(request, request.maxOutputTokens(), false);
+    }
+
+    private ProviderResult complete(ProviderRequest request, int maxTokens, boolean retried) throws IOException, InterruptedException {
         List<String> system = new ArrayList<>();
         List<ChatMessage> turns = new ArrayList<>();
         for (ChatMessage m : request.messages()) {
@@ -60,7 +66,7 @@ public final class AnthropicProvider implements AiProvider {
 
         JsonObject json = new JsonObject();
         json.addProperty("model", model);
-        json.addProperty("max_tokens", request.maxOutputTokens());
+        json.addProperty("max_tokens", maxTokens);
         if (!system.isEmpty()) json.addProperty("system", String.join("\n\n", system));
         JsonArray messages = new JsonArray();
         for (ChatMessage m : turns) {
@@ -74,16 +80,28 @@ public final class AnthropicProvider implements AiProvider {
         JsonObject answer = HttpSupport.parseObject(
                 http.postJson(endpoint, json, Map.of("x-api-key", apiKey, "anthropic-version", API_VERSION)), id());
         StringBuilder text = new StringBuilder();
+        StringBuilder kinds = new StringBuilder();
         JsonElement content = answer.get("content");
         if (content != null && content.isJsonArray()) {
             for (JsonElement block : content.getAsJsonArray()) {
-                if ("text".equals(HttpSupport.string(block, "type"))) {
+                String type = HttpSupport.string(block, "type");
+                if (kinds.length() > 0) kinds.append(',');
+                kinds.append(type);
+                if ("text".equals(type)) {
                     String t = HttpSupport.string(block, "text");
                     if (t != null) text.append(t);
                 }
             }
         }
-        if (text.isEmpty()) throw new IOException("Unexpected response from anthropic: no text content");
+        if (text.isEmpty()) {
+            String stop = HttpSupport.string(answer, "stop_reason");
+            // models that think first can spend the whole limit before writing: retry once with more room
+            if ("max_tokens".equals(stop) && !retried && maxTokens < RETRY_MAX_TOKENS) {
+                return complete(request, Math.min(RETRY_MAX_TOKENS, Math.max(maxTokens * 4, 800)), true);
+            }
+            throw new IOException("Unexpected response from anthropic: no text content (stop_reason=" + stop
+                    + ", blocks=[" + kinds + "]" + ("max_tokens".equals(stop) ? ", raise max-output-tokens" : "") + ")");
+        }
         String usedModel = HttpSupport.string(answer, "model");
         return new ProviderResult(text.toString(), HttpSupport.integer(answer, "usage", "input_tokens"),
                 HttpSupport.integer(answer, "usage", "output_tokens"), usedModel == null ? model : usedModel);

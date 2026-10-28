@@ -59,7 +59,7 @@ class ProviderSettingsTest {
         assertFalse(s.cacheEnabled());
         assertEquals(200, s.cacheMaxEntries());
         assertEquals(10, s.cacheTtlMinutes());
-        assertEquals(200, s.maxOutputTokens());
+        assertEquals(400, s.maxOutputTokens());
         assertEquals(Set5.names(), s.providers().keySet());
         assertEquals("claude-haiku-5-5", s.providers().get("anthropic").model());
         assertEquals("https://api.openai.com/v1", s.providers().get("openai").baseUrl());
@@ -119,7 +119,7 @@ class ProviderSettingsTest {
         assertEquals(200, s.cacheMaxEntries());
         assertEquals(10, s.cacheTtlMinutes());
         assertEquals("https://api.openai.com/v1", s.providers().get("openai").baseUrl());
-        assertEquals(200, s.providers().get("openai").maxOutputTokens());
+        assertEquals(400, s.providers().get("openai").maxOutputTokens());
         assertEquals("", s.providers().get("openai").apiKey(), "placeholder counts as unset");
         assertFalse(s.providers().containsKey("bad"));
         assertFalse(s.providers().containsKey("notype"));

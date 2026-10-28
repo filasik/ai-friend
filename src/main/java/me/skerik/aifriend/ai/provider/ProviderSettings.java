@@ -38,7 +38,7 @@ public record ProviderSettings(
     }
 
     public static final String DEFAULT_PRIMARY = "openai";
-    public static final int DEFAULT_MAX_OUTPUT_TOKENS = 200;
+    public static final int DEFAULT_MAX_OUTPUT_TOKENS = 400;
 
     public ProviderSettings {
         providers = Map.copyOf(providers);

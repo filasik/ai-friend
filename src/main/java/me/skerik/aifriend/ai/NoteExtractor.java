@@ -65,7 +65,7 @@ public final class NoteExtractor {
             if (n == null || !n.isJsonArray()) return List.of();
             notes = n.getAsJsonArray();
         } catch (JsonParseException | IllegalStateException e) {
-            return List.of();
+            notes = salvage(text); // most often an answer cut off by the output limit: keep the notes that are complete
         }
         List<Candidate> out = new ArrayList<>();
         int looked = 0;
@@ -83,6 +83,29 @@ public final class NoteExtractor {
             out.add(new Candidate(name, clean));
         }
         return out;
+    }
+
+    private static final java.util.regex.Pattern OBJECT = java.util.regex.Pattern.compile("\\{[^{}]*\\}");
+    private static final java.util.regex.Pattern EMPTY = java.util.regex.Pattern.compile("\"notes\"\\s*:\\s*\\[\\s*\\]");
+
+    /** The complete {@code {"player":...,"note":...}} objects of a broken answer. */
+    private static JsonArray salvage(String text) {
+        JsonArray out = new JsonArray();
+        var m = OBJECT.matcher(text);
+        while (m.find()) {
+            try {
+                JsonElement e = JsonParser.parseString(m.group());
+                if (e.isJsonObject() && e.getAsJsonObject().has("player") && e.getAsJsonObject().has("note")) out.add(e);
+            } catch (JsonParseException ignored) {
+                // an object that is itself cut or broken
+            }
+        }
+        return out;
+    }
+
+    /** True when the answer is not simply "nothing worth keeping" ({@code {"notes":[]}}), so an empty result is suspicious. */
+    public static boolean unexpectedlyEmpty(String reply) {
+        return reply != null && !reply.isBlank() && !EMPTY.matcher(reply).find();
     }
 
     private static String string(JsonObject o, String key) {

@@ -108,7 +108,8 @@ public final class ChatBot {
     static final int MIN_PLAYERS_FOR_SLEEP = 2;
     static final int MAX_EVENT_LINES = 5;
     static final int MAX_PARALLEL_ASKS = 3;
-    static final int EXTRACT_MAX_TOKENS = 300;
+    /** Three notes of 120 characters in a language that tokenizes badly (Czech) plus the JSON do not fit into 300. */
+    static final int EXTRACT_MAX_TOKENS = 600;
     static final int MAX_PENDING_LINES = 60;
     static final int MAX_KNOWN_NAMES = 5000;
     static final int MAX_RELATIONS = 5;
@@ -391,7 +392,10 @@ public final class ChatBot {
                 if (post(r, answer.reply, p, null, Source.TIMED).isPresent()) afterAnswer(batch);
             }
             case SLEEP -> maybeSleep(r, batch, now);
-            case NONE -> log.fine("The AI service returned nothing to say");
+            case NONE -> {
+                log.fine("The AI service returned nothing to say");
+                collectNotes(batch); // staying quiet is no reason to lose what players told about themselves
+            }
         }
     }
 
@@ -614,6 +618,12 @@ public final class ChatBot {
     private void afterAnswer(List<ChatLine> lines) {
         if (lines.isEmpty()) return;
         countRelationships(lines);
+        collectNotes(lines);
+    }
+
+    /** Queues the lines for long-term notes and, every N-th batch, extracts them in the background. */
+    private void collectNotes(List<ChatLine> lines) {
+        if (lines.isEmpty()) return;
         LongTermMemory ltm = longMemory;
         if (ltm == null || !ltm.config().enabled()) return;
         for (ChatLine line : lines) {
@@ -663,7 +673,13 @@ public final class ChatBot {
             Map<String, String> names = new LinkedHashMap<>();
             for (ChatLine l : lines) names.putIfAbsent(l.player().toLowerCase(Locale.ROOT), l.player());
             ProviderResult res = complete(r, NoteExtractor.messages(lines), EXTRACT_MAX_TOKENS, true, null, at);
-            for (NoteExtractor.Candidate c : NoteExtractor.parse(res.text(), names)) {
+            List<NoteExtractor.Candidate> candidates = NoteExtractor.parse(res.text(), names);
+            if (candidates.isEmpty() && NoteExtractor.unexpectedlyEmpty(res.text())) {
+                // nothing usable although the model did not say "nothing to keep": wrong format, filtered or cut off
+                log.warning("Long-term memory: no note could be read from the model's answer (" + res.text().length()
+                        + " characters). If this repeats, check that the provider answers with the requested JSON.");
+            }
+            for (NoteExtractor.Candidate c : candidates) {
                 UUID id = knownNames.get(c.player().toLowerCase(Locale.ROOT));
                 if (id == null || isMuted(id)) continue;
                 ltm.remember(id, c.player(), c.note());

@@ -324,18 +324,18 @@ AiFriendApi api = Bukkit.getServicesManager().load(AiFriendApi.class); // null u
 | `provider.providers.openai.api-key` | placeholder | OpenAI key |
 | `provider.providers.openai.model` | `gpt-4o-mini` | OpenAI model |
 | `provider.providers.openai.base-url` | `https://api.openai.com/v1` | Change only for a compatible gateway |
-| `provider.providers.openai.max-output-tokens` | `200` | 16-4000 |
+| `provider.providers.openai.max-output-tokens` | `400` | 16-4000 |
 | `provider.providers.anthropic.api-key` | placeholder | Anthropic key |
 | `provider.providers.anthropic.model` | `claude-haiku-5-5` | Claude model |
 | `provider.providers.anthropic.base-url` | `https://api.anthropic.com` | |
-| `provider.providers.anthropic.max-output-tokens` | `200` | 16-4000 |
+| `provider.providers.anthropic.max-output-tokens` | `400` | 16-4000 |
 | `provider.providers.ollama.model` | `llama3.2` | Local model |
 | `provider.providers.ollama.base-url` | `http://localhost:11434` | |
-| `provider.providers.ollama.max-output-tokens` | `200` | 16-4000 |
+| `provider.providers.ollama.max-output-tokens` | `400` | 16-4000 |
 | `provider.providers.custom.model` | empty | Required for `custom` |
 | `provider.providers.custom.base-url` | empty | Required, e.g. `https://openrouter.ai/api/v1` |
 | `provider.providers.custom.api-key` | empty | Leave empty for servers without a key |
-| `provider.providers.custom.max-output-tokens` | `200` | 16-4000 |
+| `provider.providers.custom.max-output-tokens` | `400` | 16-4000 |
 | `provider.providers.<name>.type` | | For your own names: which kind to behave like, e.g. `custom` |
 | `personas.enabled` | `false` | Use personas |
 | `personas.list` | two examples | Each: `name`, `prompt`, `worlds` (empty = all), `time` (`any`/`day`/`night`), `weight` (0-1000) |

@@ -101,21 +101,21 @@ provider:
       model: gpt-4o-mini
       api-key: your_openai_api_key_here
       base-url: https://api.openai.com/v1
-      max-output-tokens: 200
+      max-output-tokens: 400
     anthropic:
       model: claude-haiku-5-5
       api-key: your_anthropic_api_key_here
       base-url: https://api.anthropic.com
-      max-output-tokens: 200
+      max-output-tokens: 400
     ollama:
       model: llama3.2
       base-url: http://localhost:11434
-      max-output-tokens: 200
+      max-output-tokens: 400
     custom:
       model: ""
       base-url: ""        # e.g. https://openrouter.ai/api/v1 or http://localhost:1234/v1
       api-key: ""         # leave empty for servers without a key
-      max-output-tokens: 200
+      max-output-tokens: 400
     # You can add more under your own name by giving a type, e.g. a second OpenAI-compatible server:
     #   openrouter:
     #     type: custom

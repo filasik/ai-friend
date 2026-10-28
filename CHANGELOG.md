@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.0.2
+
+Fixes for the direct providers. No config change (`config-version` stays 6); existing `config.yml` files keep their values, so raise `max-output-tokens` yourself if you see the Anthropic error below.
+
+- Fix: `AI request failed (Unexpected response from anthropic: no text content)` and `/ai` answering "cannot answer": models that think first (e.g. Claude Haiku 5.5) could use up the whole `max-output-tokens` before writing any text. The request is now retried once with more room, and the error names the `stop_reason` and the block types. The default `max-output-tokens` is 400 (was 200, too tight for Czech) for new installs
+- Fix: the long-term notes table stayed empty: the note extraction was cut off by its 300 token limit (now 600), a cut-off reply still keeps the complete notes it contains, a warning is logged when an answer contains no notes although it should, and exchanges the bot stayed quiet about (`skip`) are still noted
+
 ## 3.0.1
 
 Server knowledge, a chat-style bot and a bot that stops telling players where they are. `config-version` is now 6; the new `knowledge` section and `server-context.share-percent` are added to your `config.yml` automatically (backup `config.yml.bak-v5`), your values stay. Server knowledge is off by default.

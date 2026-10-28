@@ -323,18 +323,18 @@ AiFriendApi api = Bukkit.getServicesManager().load(AiFriendApi.class); // null, 
 | `provider.providers.openai.api-key` | zástupná hodnota | OpenAI klíč |
 | `provider.providers.openai.model` | `gpt-4o-mini` | Model OpenAI |
 | `provider.providers.openai.base-url` | `https://api.openai.com/v1` | Měňte jen pro kompatibilní bránu |
-| `provider.providers.openai.max-output-tokens` | `200` | 16-4000 |
+| `provider.providers.openai.max-output-tokens` | `400` | 16-4000 |
 | `provider.providers.anthropic.api-key` | zástupná hodnota | Anthropic klíč |
 | `provider.providers.anthropic.model` | `claude-haiku-5-5` | Model Claude |
 | `provider.providers.anthropic.base-url` | `https://api.anthropic.com` | |
-| `provider.providers.anthropic.max-output-tokens` | `200` | 16-4000 |
+| `provider.providers.anthropic.max-output-tokens` | `400` | 16-4000 |
 | `provider.providers.ollama.model` | `llama3.2` | Lokální model |
 | `provider.providers.ollama.base-url` | `http://localhost:11434` | |
-| `provider.providers.ollama.max-output-tokens` | `200` | 16-4000 |
+| `provider.providers.ollama.max-output-tokens` | `400` | 16-4000 |
 | `provider.providers.custom.model` | prázdné | U `custom` povinné |
 | `provider.providers.custom.base-url` | prázdné | Povinné, např. `https://openrouter.ai/api/v1` |
 | `provider.providers.custom.api-key` | prázdné | U serverů bez klíče nechte prázdné |
-| `provider.providers.custom.max-output-tokens` | `200` | 16-4000 |
+| `provider.providers.custom.max-output-tokens` | `400` | 16-4000 |
 | `provider.providers.<název>.type` | | Pro vlastní názvy: podle jakého druhu se chovat, např. `custom` |
 | `personas.enabled` | `false` | Používat persony |
 | `personas.list` | dva příklady | Každá: `name`, `prompt`, `worlds` (prázdné = všechny), `time` (`any`/`day`/`night`), `weight` (0-1000) |

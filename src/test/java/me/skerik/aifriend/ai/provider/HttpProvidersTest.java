@@ -145,6 +145,16 @@ class HttpProvidersTest {
         assertThrows(IOException.class, () -> p.complete(REQ));
     }
 
+    @Test
+    void anthropicOutputLimitUsedUpByThinkingRetriesWithMoreRoomAndExplains() {
+        server.response = "{\"content\":[{\"type\":\"thinking\",\"thinking\":\"x\"}],\"stop_reason\":\"max_tokens\"}";
+        var p = new AnthropicProvider(server.baseUrl(), KEY, "m", OPTS);
+        IOException e = assertThrows(IOException.class, () -> p.complete(REQ));
+        assertTrue(e.getMessage().contains("stop_reason=max_tokens"), e.getMessage());
+        assertTrue(e.getMessage().contains("thinking"), e.getMessage());
+        assertEquals(800, server.json().get("max_tokens").getAsInt(), "the retry had more room");
+    }
+
     // --- ollama ---
 
     @Test
