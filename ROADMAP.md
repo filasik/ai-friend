@@ -82,7 +82,7 @@ Cíl: plugin nepadá, nezamrzá a neuniká z něj nic citlivého.
 
 ## Fáze 4 – Poskytovatelé a technické rozšíření
 
-- ⬜ Abstrakce `AiProvider` (OpenAI přímo, stávající proxy, Anthropic, Ollama / lokální modely, vlastní endpoint).
+- ⬜ Abstrakce `AiProvider` (OpenAI přímo, Anthropic, Deepseek, Openrouter, Ollama / lokální modely, vlastní endpoint).
 - ⬜ Failover mezi poskytovateli.
 - ⬜ Cache odpovědí na opakované otázky.
 - ⬜ Dlouhodobá paměť (SQLite + embeddings), bot si pamatuje hráče a jejich historii.

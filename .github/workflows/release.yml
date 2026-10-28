@@ -2,6 +2,11 @@ name: Release
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to (re)publish to Modrinth and Hangar (e.g. v2.0.0)
+        required: true
 
 permissions:
   contents: write
@@ -9,30 +14,52 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 25
       - uses: gradle/actions/setup-gradle@v4
       - name: Smoke test (čistý Paper server)
+        if: github.event_name == 'push'
         run: ./scripts/smoke-test.sh
+      - name: Build
+        if: github.event_name != 'push'
+        run: ./gradlew build -x test
       - name: GitHub Release
+        if: github.event_name == 'push'
         uses: softprops/action-gh-release@v2
         with:
           files: build/libs/*.jar
           fail_on_unmatched_files: true
           body_path: CHANGELOG.md
+
       - name: Modrinth
+        if: ${{ !cancelled() }}
         env:
           MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
-        run: ./gradlew modrinth
+        run: |
+          VERSION="${TAG#v}"
+          PROJECT=$(sed -n 's/^modrinthId=//p' gradle.properties)
+          GAME=$(sed -n 's/^minecraftVersion=//p' gradle.properties)
+          awk -v v="$VERSION" '$0=="## "v{f=1;next} /^## /{f=0} f' CHANGELOG.md > notes.md
+          JAR=$(ls build/libs/*.jar | head -n1)
+          DATA=$(jq -n --arg v "$VERSION" --arg p "$PROJECT" --arg g "$GAME" --rawfile c notes.md \
+            '{name:("AI Friend "+$v), version_number:$v, changelog:$c, dependencies:[], game_versions:[$g], version_type:"release", loaders:["paper","folia","purpur"], featured:true, project_id:$p, file_parts:["file"], primary_file:"file"}')
+          curl --fail-with-body -sS -X POST https://api.modrinth.com/v2/version \
+            -H "Authorization: $MODRINTH_TOKEN" \
+            -H "User-Agent: filasik/ai-friend release workflow" \
+            --form-string "data=$DATA" -F "file=@$JAR"
+
       - name: Hangar
         if: ${{ !cancelled() }}
         env:
           HANGAR_API_KEY: ${{ secrets.HANGAR_API_KEY }}
-          TAG: ${{ github.ref_name }}
         run: |
           VERSION="${TAG#v}"
           SLUG=$(sed -n 's/^hangarSlug=//p' gradle.properties)
