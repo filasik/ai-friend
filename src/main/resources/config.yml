@@ -1,0 +1,76 @@
+# ============================================================================
+#  AI Friend configuration
+#  Reload most values with /aifriend reload.
+#  Support: https://github.com/filasik/ai-friend
+# ============================================================================
+
+# Config format version. Do not change: when you update the plugin, options that are new in the
+# newer version are added to this file automatically (your values stay, a backup is saved first).
+# Options of AI Friend 1.x (openai_api_key, gpt_version, ...) are renamed automatically on the first start.
+config-version: 1
+
+# Language of the plugin's own messages (commands, status): en, cs.
+# The files plugins/ai-friend/messages_<locale>.yml are yours to edit; missing keys fall back to the built-in text.
+locale: en
+
+# Check GitHub releases for a newer version (async, once at startup and then every 12 hours).
+# Players with aifriend.admin are told when they join.
+update-check: true
+
+command:
+  # Extra aliases for /aifriend. Restart required. Remove an alias if another plugin already owns it.
+  aliases: []
+
+# Anonymous usage statistics through bStats (server count, Minecraft version, ...).
+# Set to false to switch them off for this plugin. The global switch is plugins/bStats/config.yml.
+metrics: true
+
+# --- The chatbot ------------------------------------------------------------
+
+# Switch the chatbot on or off without removing the plugin.
+enabled: true
+
+# Your key. Without a key the bot stays silent (and nothing leaves your server).
+#   "trial"  = free 3-day trial key (limited, the model below is ignored)
+#   otherwise a key from https://platform.openai.com/signup
+# Chat lines, this key, the model and your server address are sent to the proxy https://gpt.netuj.eu,
+# which forwards them to OpenAI. Tell your players (see the Privacy section in the README).
+api-key: your_openai_api_key_here
+
+# Model to use: gpt-4o-mini, gpt-4o, ... (ignored with the "trial" key).
+model: gpt-4o-mini
+
+# How the bot is named in chat ("<name>: message").
+chatbot-name: AI Friend
+
+# The language the bot always answers in: English, Czech, German, ...
+language: English
+
+# Anything the bot should know or do, e.g. "Our website is https://example.com and sometimes tell a joke."
+# May stay empty.
+personalization: ""
+
+# How often (seconds, 5-3600) the bot looks at the chat and answers. Nothing is sent when nobody wrote anything.
+interval-seconds: 60
+
+# The bot goes quiet when players clearly do not want to talk to it.
+# It only listens to this when at least 2 different players took part (or every online player if fewer),
+# so one player cannot silence it for everybody.
+stop-when-ignored: true
+
+# How long (minutes) the bot stays quiet after that. /aifriend reload wakes it up immediately.
+sleep-minutes: 30
+
+# --- Limits and network -----------------------------------------------------
+
+# Chat lines kept while waiting for the next answer (oldest are dropped first). 5-500.
+max-queued-messages: 50
+
+# Longest answer posted in chat, in characters (longer answers are cut). 20-1000.
+max-reply-length: 256
+
+http:
+  # Seconds to wait for the connection / for the answer before giving up (seconds, 1-120).
+  connect-timeout-seconds: 10
+  read-timeout-seconds: 30
+  # After a failed request the bot waits 1, 2, 4, ... minutes (at most 15) before it tries again.

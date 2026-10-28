@@ -1,0 +1,20 @@
+name: ${name}
+version: '${version}'
+main: ${main}
+loader: ${loader}
+description: '${description}'
+website: ${website}
+authors: [Filasik, Patr1xCZ]
+api-version: '${apiVersion}'
+# Everything goes through the Scheduler abstraction (global / entity / async), so Folia works.
+folia-supported: true
+permissions:
+  aifriend.use:
+    description: Use /aifriend (version and help)
+    default: true
+  aifriend.admin:
+    description: /aifriend status, update notifications on join
+    default: op
+  aifriend.reload:
+    description: Reload the configuration with /aifriend reload
+    default: op

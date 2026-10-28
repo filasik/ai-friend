@@ -1,0 +1,42 @@
+name: Bug report
+description: Something does not work as expected
+labels: [bug]
+body:
+  - type: input
+    id: plugin-version
+    attributes: { label: Plugin version }
+    validations: { required: true }
+  - type: input
+    id: server
+    attributes:
+      label: Server software and version
+      description: Output of /version
+    validations: { required: true }
+  - type: textarea
+    id: what
+    attributes: { label: "What happened? What did you expect?" }
+    validations: { required: true }
+  - type: textarea
+    id: steps
+    attributes: { label: Steps to reproduce }
+  - type: dropdown
+    id: key-type
+    attributes:
+      label: Which API key do you use?
+      options: ["trial", "own OpenAI key", "not set"]
+  - type: textarea
+    id: status
+    attributes:
+      label: Output of /aifriend status
+      description: The API key is masked, but check before posting
+  - type: textarea
+    id: config
+    attributes:
+      label: config.yml
+      description: "Paste the relevant part. Remove your API key first!"
+      render: yaml
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / stack trace
+      description: Paste via https://mclo.gs and link it here

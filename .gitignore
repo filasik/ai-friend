@@ -1,3 +1,25 @@
-.idea/*
-.DS_Store
+# Build / IDE / local server
+.gradle/
+build/
+run/
+smoke-output.txt
+.idea/
+*.iml
 .vscode/
+.DS_Store
+.fuse_hidden*
+local.properties
+*.class
+*.log
+*.db
+hs_err_pid*
+
+# Jars stay out, except the Gradle wrapper
+*.jar
+!gradle/wrapper/gradle-wrapper.jar
+
+# AI tooling and local-only notes (the repo is open source, these are not committed)
+CLAUDE.md
+.claude/
+docs/DECISIONS.md
+docs/MANUAL_TEST.md

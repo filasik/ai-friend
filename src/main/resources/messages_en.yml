@@ -1,0 +1,33 @@
+# AI Friend messages (MiniMessage). Missing keys fall back to the built-in English text.
+# Placeholders in <angle brackets> are filled in by the plugin; keep them.
+prefix: '<dark_gray>[<gold>AI Friend<dark_gray>]<reset>'
+
+error:
+  not-ready: '<prefix> <red>AI Friend is still starting up. Try again in a moment.'
+  players-only: '<prefix> <red>This command can only be used by players.'
+  no-permission: '<prefix> <red>You do not have permission to do that.'
+  generic: '<prefix> <red>Something went wrong. Please try again or tell an admin.'
+
+# How the bot's answer looks in chat. <bot> is chatbot-name from config.yml, <text> the answer (never parsed as MiniMessage).
+chat:
+  format: '<gray><bot><dark_gray>:</dark_gray> <white><text>'
+
+command:
+  info: '<prefix> <gray>AI Friend v<version> · <white>/aifriend status</white> shows the state, <white>/aifriend reload</white> reloads the configuration.'
+  reloaded: '<prefix> <green>Configuration and messages reloaded. Command aliases need a restart.'
+  status:
+    - '<prefix> <gold>AI Friend v<version>'
+    - '<gray>  State: <white><state>'
+    - '<gray>  Bot: <white><bot></white> · model <white><model></white> · language <white><language>'
+    - '<gray>  API key: <white><key>'
+    - '<gray>  Interval: <white><interval> s</white> · queued chat lines: <white><queued>/<max-queued>'
+    - '<gray>  Failed requests in a row: <white><failures>'
+  state:
+    running: '<green>running'
+    disabled: '<red>disabled (enabled: false in config.yml)'
+    no-key: '<red>idle, api-key is not set in config.yml'
+    sleeping: '<yellow>sleeping, wakes up in <minutes> min (players were not interested)'
+    backoff: '<yellow>waiting <seconds> s before the next attempt (last request failed)'
+
+update:
+  available: '<prefix> <yellow>A new version is available: <white><version></white> <click:open_url:''<url>''><aqua>[download]</aqua></click>'

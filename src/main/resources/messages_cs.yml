@@ -1,0 +1,33 @@
+# Zprávy AI Friend (MiniMessage). Chybějící klíče se doplní z vestavěné angličtiny.
+# Zástupné znaky v <ostrých závorkách> plugin vyplní sám, nech je.
+prefix: '<dark_gray>[<gold>AI Friend<dark_gray>]<reset>'
+
+error:
+  not-ready: '<prefix> <red>AI Friend se ještě spouští. Zkus to za chvíli.'
+  players-only: '<prefix> <red>Tento příkaz mohou použít jen hráči.'
+  no-permission: '<prefix> <red>Na tohle nemáš oprávnění.'
+  generic: '<prefix> <red>Něco se pokazilo. Zkus to znovu nebo napiš adminovi.'
+
+# Jak vypadá odpověď bota v chatu. <bot> je chatbot-name z config.yml, <text> odpověď (nikdy se nečte jako MiniMessage).
+chat:
+  format: '<gray><bot><dark_gray>:</dark_gray> <white><text>'
+
+command:
+  info: '<prefix> <gray>AI Friend v<version> · <white>/aifriend status</white> ukáže stav, <white>/aifriend reload</white> načte konfiguraci znovu.'
+  reloaded: '<prefix> <green>Konfigurace a zprávy znovu načteny. Aliasy příkazů vyžadují restart.'
+  status:
+    - '<prefix> <gold>AI Friend v<version>'
+    - '<gray>  Stav: <white><state>'
+    - '<gray>  Bot: <white><bot></white> · model <white><model></white> · jazyk <white><language>'
+    - '<gray>  API klíč: <white><key>'
+    - '<gray>  Interval: <white><interval> s</white> · řádků chatu ve frontě: <white><queued>/<max-queued>'
+    - '<gray>  Neúspěšných požadavků za sebou: <white><failures>'
+  state:
+    running: '<green>běží'
+    disabled: '<red>vypnutý (enabled: false v config.yml)'
+    no-key: '<red>nečinný, api-key není nastaven v config.yml'
+    sleeping: '<yellow>spí, probudí se za <minutes> min (hráči neměli zájem)'
+    backoff: '<yellow>čeká <seconds> s před dalším pokusem (poslední požadavek selhal)'
+
+update:
+  available: '<prefix> <yellow>Je dostupná nová verze: <white><version></white> <click:open_url:''<url>''><aqua>[stáhnout]</aqua></click>'

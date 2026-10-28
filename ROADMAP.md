@@ -11,56 +11,56 @@ Legenda: ⬜ nezačato · 🔧 rozpracováno · ✅ hotovo
 Cíl: plugin nepadá, nezamrzá a neuniká z něj nic citlivého.
 
 ### 1.1 Vlákna a HTTP
-- ⬜ Nahradit `java.util.Timer` Bukkit schedulerem (`runTaskTimerAsynchronously`).
-- ⬜ Odpověď do chatu odesílat zpět na hlavní vlákno (`runTask`), ne z vlákna timeru.
-- ⬜ Nastavit connect a read timeout na HTTP spojení.
-- ⬜ Zachytávat všechny výjimky při volání API (výpadek sítě už nesmí ukončit smyčku).
-- ⬜ Backoff při opakovaných chybách (např. 1 → 2 → 4 min, max 15 min).
+- ✅ Nahradit `java.util.Timer` Bukkit schedulerem (`runTaskTimerAsynchronously`).
+- ✅ Odpověď do chatu odesílat zpět na hlavní vlákno (`runTask`), ne z vlákna timeru.
+- ✅ Nastavit connect a read timeout na HTTP spojení.
+- ✅ Zachytávat všechny výjimky při volání API (výpadek sítě už nesmí ukončit smyčku).
+- ✅ Backoff při opakovaných chybách (např. 1 → 2 → 4 min, max 15 min).
 
 ### 1.2 Sdílený stav
-- ⬜ Nahradit `mutableListOf()` thread-safe frontou (`ConcurrentLinkedQueue`) s limitem velikosti.
-- ⬜ Při odesílání odebrat jen zprávy, které byly skutečně odeslány (neztrácet zprávy přijaté během HTTP volání).
+- ✅ Nahradit `mutableListOf()` thread-safe frontou (`ConcurrentLinkedQueue`) s limitem velikosti.
+- ✅ Při odesílání odebrat jen zprávy, které byly skutečně odeslány (neztrácet zprávy přijaté během HTTP volání).
 
 ### 1.3 JSON a prompt injection
-- ⬜ Skládat i parsovat JSON knihovnou (Gson) místo string templates a regexu na `\uXXXX`.
-- ⬜ Oddělit systémové instrukce od hráčského textu (samostatné role/zprávy, ne lepení do jednoho stringu).
-- ⬜ Nespoléhat na `contains("STOP MESSAGING")` – strukturovaná odpověď (např. JSON pole `action`).
-- ⬜ Ochrana proti tomu, aby jeden hráč napsáním magické fráze vypnul bota všem.
+- ✅ Skládat i parsovat JSON knihovnou (Gson) místo string templates a regexu na `\uXXXX`.
+- ✅ Oddělit systémové instrukce od hráčského textu (proxy přijímá jediný `message`, takže: hráčské řádky jsou escapované JSON v ohraničeném bloku označeném jako nedůvěryhodná data; samostatné role přijdou s přímým voláním OpenAI ve Fázi 4).
+- ✅ Nespoléhat na `contains("STOP MESSAGING")` – strukturovaná odpověď (např. JSON pole `action`).
+- ✅ Ochrana proti tomu, aby jeden hráč napsáním magické fráze vypnul bota všem.
 
 ### 1.4 Příkazy a oprávnění
-- ⬜ Opravit `/aifriendreload`: neregistrovat listenery znovu, rušit staré timery, validovat `timer_interval`.
-- ⬜ Zrušit i 30minutový „spánek“ timer při reloadu/disable (`onDisable` musí vše uklidit).
-- ⬜ Maskovat API klíč ve výpisu `/aifriend` (např. `sk-…abcd`).
-- ⬜ Povolit příkazy i z konzole (`sender !is Player`).
-- ⬜ Přejít z `isOp` na permissions (`aifriend.admin`, `aifriend.reload`) v `plugin.yml`.
-- ⬜ Tab-complete pro příkazy.
+- ✅ Opravit `/aifriendreload`: neregistrovat listenery znovu, rušit staré timery, validovat `timer_interval`.
+- ✅ Zrušit i 30minutový „spánek“ timer při reloadu/disable (`onDisable` musí vše uklidit).
+- ✅ Maskovat API klíč ve výpisu `/aifriend` (např. `sk-…abcd`).
+- ✅ Povolit příkazy i z konzole (`sender !is Player`).
+- ✅ Přejít z `isOp` na permissions (`aifriend.admin`, `aifriend.reload`) v `plugin.yml`.
+- ✅ Tab-complete pro příkazy.
 
 ### 1.5 Konfigurace
-- ⬜ `saveDefaultConfig()` + komentovaný `config.yml` v resources místo přepisování souboru při každém startu.
-- ⬜ Zachovat uživatelovy komentáře a neznámé klíče; přidat `config_version` a migrace.
-- ⬜ Zpětná kompatibilita se starými klíči (`preffered_language`, `player_dissinterest`) + nové správně pojmenované klíče s varováním o deprecaci.
-- ⬜ Přestat stínit `JavaPlugin.config` vlastní proměnnou.
+- ✅ `saveDefaultConfig()` + komentovaný `config.yml` v resources místo přepisování souboru při každém startu.
+- ✅ Zachovat uživatelovy komentáře a neznámé klíče; přidat `config_version` a migrace.
+- ✅ Zpětná kompatibilita se starými klíči: při prvním startu 2.0.0 se automaticky přejmenují (záloha `config.yml.bak-v0`).
+- ✅ Přestat stínit `JavaPlugin.config` vlastní proměnnou.
 
 ### 1.6 UpdateChecker
-- ⬜ Verzi číst z `plugin.description.version` (dnes hardcoded `1.4.0` vs. `1.4.1` v `pom.xml`).
-- ⬜ Kontrola asynchronně, při startu neblokovat server; výsledek cachovat (ne HTTP při každém joinu opa).
-- ⬜ Porovnávat verze sémanticky, ne jako řetězce.
+- ✅ Verzi číst z `plugin.description.version` (dnes hardcoded `1.4.0` vs. `1.4.1` v `pom.xml`).
+- ✅ Kontrola asynchronně, při startu neblokovat server; výsledek cachovat (ne HTTP při každém joinu opa).
+- ✅ Porovnávat verze sémanticky, ne jako řetězce.
 
 ### 1.7 Důvěrnost
-- ⬜ Zdokumentovat v README, že požadavky jdou přes `gpt.netuj.eu`, a co se tam ukládá.
+- ✅ Zdokumentovat v README, že požadavky jdou přes `gpt.netuj.eu`, a co se tam ukládá.
 - ⬜ Volitelný režim přímého volání OpenAI s vlastním klíčem (viz Fáze 4).
 
 ---
 
 ## Fáze 2 – Úklid repa a kvalita
 
-- ⬜ Odstranit `target/`, `dependency-reduced-pom.xml` a `.idea/` z gitu, doplnit `.gitignore`.
-- ⬜ Aktualizovat Kotlin ze `2.1.0-Beta2` na stabilní verzi.
-- ⬜ Sloučit duplicitní ANSI konstanty do jednoho helperu; nahradit deprecated `ChatColor` (Adventure/MiniMessage tam, kde to Spigot/Paper dovolí).
-- ⬜ Rozdělit `AiFriend.kt` na menší celky: `ConfigManager`, `AiClient`, `ChatListener`, `Commands`, `Scheduler`.
-- ⬜ README: opravit rozdíly proti kódu (`openai_chatbot_name` → `chatbot_name`, chybějící `gpt_version`, `player_dissinterest`), přidat sekci o oprávněních a soukromí.
-- ⬜ Unit testy (parsování odpovědí, sestavení promptu, rate limit) a GitHub Actions CI (build + testy).
-- ⬜ Changelog (`CHANGELOG.md`) a sémantické verzování.
+- ✅ Odstranit `target/`, `dependency-reduced-pom.xml` a `.idea/` z gitu, doplnit `.gitignore`.
+- ✅ Kotlin odstraněn: přepis na Java 25 + Gradle podle `_template` (verze 2.0.0, jen Paper).
+- ✅ Sloučit duplicitní ANSI konstanty do jednoho helperu; nahradit deprecated `ChatColor` (Adventure/MiniMessage tam, kde to Spigot/Paper dovolí).
+- ✅ Rozdělit `AiFriend.kt` na menší celky: `ConfigManager`, `AiClient`, `ChatListener`, `Commands`, `Scheduler`.
+- ✅ README: opravit rozdíly proti kódu (`openai_chatbot_name` → `chatbot_name`, chybějící `gpt_version`, `player_dissinterest`), přidat sekci o oprávněních a soukromí.
+- ✅ Unit testy (parsování odpovědí, sestavení promptu, rate limit) a GitHub Actions CI (build + testy).
+- ✅ Changelog (`CHANGELOG.md`) a sémantické verzování.
 
 ---
 
@@ -76,7 +76,7 @@ Cíl: plugin nepadá, nezamrzá a neuniká z něj nic citlivého.
 - ⬜ **Testovací režim**: `/aifriend simulate` ukáže odpověď bez odeslání do chatu.
 - ⬜ **Náklady**: `/aifriend cost` + upozornění při překročení limitu.
 - ⬜ **Paměť konverzace**: posledních N výměn jako chat historie místo jediného `lastMessage`.
-- ⬜ **Lokalizace hlášek** pluginu (`messages.yml`).
+- ✅ **Lokalizace hlášek** pluginu (`messages.yml`).
 
 ---
 
@@ -87,7 +87,7 @@ Cíl: plugin nepadá, nezamrzá a neuniká z něj nic citlivého.
 - ⬜ Cache odpovědí na opakované otázky.
 - ⬜ Dlouhodobá paměť (SQLite + embeddings), bot si pamatuje hráče a jejich historii.
 - ⬜ Veřejné API a eventy (`AiFriendResponseEvent`) pro ostatní pluginy.
-- ⬜ bStats.
+- 🔧 bStats (zapojeno ze šablony; chybí registrace na bstats.org a `bstatsId`).
 - ⬜ PlaceholderAPI (`%aifriend_mood%`, `%aifriend_lastmessage%`).
 
 ---

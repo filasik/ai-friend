@@ -1,0 +1,24 @@
+# Release checklist (before tag vX.Y.Z)
+
+- [ ] `./gradlew build` is green (compiles with `-Xlint:all -Werror`, unit tests pass)
+- [ ] `./scripts/smoke-test.sh` passes (clean Paper, plugin enabled, no errors in the log)
+- [ ] Tested by hand on Paper (`docs/MANUAL_TEST.md`): chat replies, `/aifriend`, `status`, `reload`, permissions (as OP and without OP), console
+- [ ] Key not set (default placeholder): bot silent, nothing sent, `/aifriend status` says so
+- [ ] Key `trial`: bot replies
+- [ ] Invalid key: 401 path ends in one clear log line and backoff, no crash
+- [ ] Network down (e.g. blocked host): backoff 1 -> 2 -> 4 min, messages kept, recovery when the network is back
+- [ ] Upgrade from a 1.x `config.yml`: old keys migrated, values kept, backup written
+- [ ] Sleep: with 2+ players the bot sleeps when told to; with one player it does not
+- [ ] No blocking I/O on the main thread; everything scheduled through `Scheduler`; no `BukkitScheduler`
+- [ ] New config option => added to `config.yml` with a comment AND `config-version` raised; `ConfigUpdaterTest` extended
+- [ ] New message key => present in `messages_en.yml` and every bundled locale (`MessagesFilesTest`)
+- [ ] First start on a machine with internet works (libraries are downloaded by the loader); the jar contains only bStats as a shaded library
+- [ ] `gradle.properties`: `pluginVersion`, `paperApiVersion`, `apiVersion`, `minecraftVersion` current; `bstatsId` set to the real bStats plugin id (not 0)
+- [ ] The proxy protocol (`https://gpt.netuj.eu/api/ai_friend.php`) still works with this build; Privacy/data text in README and listings still matches what is sent
+- [ ] `CHANGELOG.md`, `README.md`, `README.cs.md`, `docs/modrinth.md`, `docs/spigot.bbcode.txt` match the real code (Paper-only note present)
+- [ ] Icon, banner (`scripts/render-assets.sh`), at least 2 gallery images (illustrations labelled as such, unless real screenshots)
+- [ ] README: commands, permissions, configuration, privacy, license
+- [ ] Telemetry only bStats with an off switch; no obfuscated or downloaded code (the loader only fetches the listed libraries from Maven Central)
+- [ ] New Modrinth project created by hand, `MODRINTH_TOKEN` set in GitHub secrets
+- [ ] SpigotMC: manual upload (description from `docs/spigot.bbcode.txt`; note that 2.x is Paper-only)
+- [ ] Tag `vX.Y.Z` -> CI publishes
