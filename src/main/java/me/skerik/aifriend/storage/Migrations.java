@@ -49,8 +49,19 @@ public final class Migrations {
                       last_used_at BIGINT NOT NULL,
                       use_count INT NOT NULL DEFAULT 0
                     ){OPTS}""",
-                    "CREATE INDEX {P}player_notes_uuid ON {P}player_notes (player_uuid)"));
-            // v2 example, once you need it:
+                    "CREATE INDEX {P}player_notes_uuid ON {P}player_notes (player_uuid)"),
+            // v2 (2.2.0): relationships (how well the bot knows a player, nickname)
+            List.of(
+                    """
+                    CREATE TABLE {P}relationships (
+                      player_uuid VARCHAR(36) NOT NULL PRIMARY KEY,
+                      player_name VARCHAR(32) NOT NULL,
+                      interactions INT NOT NULL DEFAULT 0,
+                      first_seen BIGINT NOT NULL,
+                      last_seen BIGINT NOT NULL,
+                      nickname VARCHAR(32) NULL
+                    ){OPTS}"""));
+            // v3 example, once you need it:
             // List.of("ALTER TABLE {P}player_notes ADD COLUMN something INT NOT NULL DEFAULT 0")
 
     /** The shipped versions (tests append their own to prove an upgrade). */

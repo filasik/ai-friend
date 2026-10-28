@@ -63,6 +63,25 @@ command:
     - '<gray>  Personas: <white><persona>'
     - '<gray>  Memory: <white><turns> turns'
     - '<gray>  Long-term memory: <white><longmemory>'
+  status-awareness:
+    - '<gray>  Server context: <white><context></white> · mood: <white><mood>'
+    - '<gray>  Relationships: <white><relationships></white> · boredom: <white><boredom></white> · supervision: <white><supervision>'
+  awareness:
+    enabled: 'on'
+    disabled: 'off'
+  nickname:
+    disabled: '<prefix> <yellow>Nicknames are switched off on this server.'
+    muted: '<prefix> <yellow>You have muted the bot. Use <white>/aifriend unmute</white> first.'
+    invalid: '<prefix> <red>That nickname has no usable characters (letters, digits, space and _ - . '' only).'
+    rejected: '<prefix> <red>The bot cannot use that nickname.'
+    set: '<prefix> <green>The bot may call you <white><nickname></white> now.'
+    cleared: '<prefix> <gray>Your nickname is cleared.'
+    info: '<prefix> <gray>The bot knows you as: <white><level></white> · for <white><days></white> day(s) · nickname: <white><nickname></white>. Change it with <white>/aifriend nickname <text></white> or <white>/aifriend nickname clear</white>.'
+    level:
+      stranger: 'a stranger'
+      acquaintance: 'an acquaintance'
+      regular: 'a regular'
+      friend: 'a friend'
   cost:
     header: '<prefix> <gold>Token usage and estimated cost'
     lines:
@@ -96,7 +115,7 @@ command:
   events:
     # Shown in /aifriend status when events are on.
     status: '<gray>  Event reactions: <white><types>'
-    off: 'off'
+    disabled: 'off'
 
 # Long-term memory (/aifriend forget, forget-all, memory). <note> and <player> are player text, never parsed as MiniMessage.
 memory:
@@ -111,6 +130,15 @@ memory:
   list-more: '<gray>  ... and <count> more'
   list-empty: '<prefix> <gray>The bot remembers nothing about <player>.'
   failed: '<prefix> <red>The memory database returned an error. See the console.'
+  forgot-relationship: '<prefix> <green>Done. The bot has forgotten how well it knows you.'
+  forgot-relationship-player: '<prefix> <green>The bot has forgotten <player>.'
+  forgot-relationship-all: '<prefix> <green>The bot has forgotten all players it knew (<count>).'
+
+# Friendly private notes of the chat supervision (nothing else happens to the player).
+supervision:
+  caps: '<prefix> <gray>Psst, your message is quite LOUD. Please ease off the caps lock :)'
+  spam: '<prefix> <gray>Easy there, you are writing very fast or repeating yourself. Give the chat a moment to breathe :)'
+  language: '<prefix> <gray>Let us keep the chat friendly, please. Everybody here is a human (or a bot) with feelings :)'
 
 update:
   available: '<prefix> <yellow>A new version is available: <white><version></white> <click:open_url:''<url>''><aqua>[download]</aqua></click>'

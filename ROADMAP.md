@@ -96,12 +96,14 @@ Verze 2.1.0 (Fáze 3 a 4). Přímé volání OpenAI a Anthropic je zatím ověř
 
 ## Fáze 5 – Vnímání světa a osobnost
 
-- ⬜ **Kontext ze serveru**: online hráči, svět, biom, počasí, denní doba, blízcí moby.
-- ⬜ **Nálada bota** měnící se podle dění (úspěchy, hromadná úmrtí, griefing).
-- ⬜ **Vývoj vztahu** s hráčem (přezdívky, vtipy pro zasvěcené).
-- ⬜ **Rozpoznání nudy**: při tichém serveru navrhne téma, kvíz nebo výzvu.
-- ⬜ **Dohled nad chatem**: přátelské upozornění na spam, caps lock a nadávky (bez automatických banů).
-- ⬜ **Více botů najednou** s vlastními personami, které spolu občas diskutují.
+Verze 2.2.0 (kromě více botů). Všechno je ve výchozím stavu vypnuté.
+
+- ✅ **Kontext ze serveru** (`server-context`): denní doba, počasí, počet hráčů online a u hráčů, kteří právě psali, svět, biom a blízcí nepřátelští moby (bez souřadnic).
+- ✅ **Nálada bota** (`mood`) měnící se podle dění: úspěchy a zabití bosse ji zvedají, smrti (hromadné víc) a opakované výbuchy (griefing) snižují; časem se vrací do klidu. Ukazuje ji `/aifriend status` a `%aifriend_mood%`.
+- ✅ **Vývoj vztahu** s hráčem (`relationships`): cizinec → známý → štamgast → kamarád podle počtu zodpovězených výměn, přezdívka podle volby hráče (`/aifriend nickname`), uloženo v databázi (migrace v2), mazání přes `/aifriend forget`.
+- ✅ **Rozpoznání nudy** (`boredom`): v tichém chatu navrhne téma, kvíz, výzvu, vtip nebo zajímavost. Jen když je online aspoň `min-players` hráčů (výchozí 1), nikdy na prázdném serveru, s cooldownem, který roste, když nikdo nereaguje, a denním limitem.
+- ✅ **Dohled nad chatem** (`supervision`): přátelské soukromé upozornění na caps lock, spam a nadávky (bez automatických banů, nic se neukládá).
+- ⬜ **Více botů najednou** s vlastními personami, které spolu občas diskutují (odloženo, bude se promýšlet).
 
 ---
 

@@ -130,11 +130,12 @@ class ConfigUpdaterTest {
 
     @Test
     void bundledConfigDeclaresAVersion() throws Exception {
-        assertEquals(3, bundled().getInt(ConfigUpdater.VERSION_KEY, 0));
+        assertEquals(4, bundled().getInt(ConfigUpdater.VERSION_KEY, 0));
     }
 
     private static final java.util.List<String> NEW_SECTIONS = java.util.List.of("provider", "personas", "memory",
-            "limits", "cost", "reply-filter", "mentions", "opt-out", "events", "storage", "long-term-memory");
+            "limits", "cost", "reply-filter", "mentions", "opt-out", "events", "storage", "long-term-memory",
+            "server-context", "mood", "relationships", "boredom", "supervision");
 
     /** What a 2.0.0 install wrote: config-version 1, only the 2.0.0 keys, one admin comment. */
     private static final String V200 = """
@@ -166,7 +167,7 @@ class ConfigUpdaterTest {
             assertTrue(user.isConfigurationSection(section), section + " missing");
             assertFalse(user.getComments(section).isEmpty(), section + " has no comment");
         }
-        assertEquals(3, user.getInt(ConfigUpdater.VERSION_KEY));
+        assertEquals(4, user.getInt(ConfigUpdater.VERSION_KEY));
         assertTrue(out.contains("Conversation memory"), out);
         assertTrue(out.contains("Rate limits"), out);
     }
@@ -264,7 +265,7 @@ class ConfigUpdaterTest {
         YamlConfiguration defaults = bundled();
         assertTrue(ConfigUpdater.merge(user, defaults) > 0);
         String out = user.saveToString();
-        assertEquals(3, user.getInt(ConfigUpdater.VERSION_KEY));
+        assertEquals(4, user.getInt(ConfigUpdater.VERSION_KEY));
         assertTrue(out.contains("# my provider note"), out);
         assertEquals("openai", user.getString("provider.primary"));
         assertEquals("sk-openai-abcdefgh", user.getString("provider.providers.openai.api-key"));
@@ -289,5 +290,42 @@ class ConfigUpdaterTest {
         assertEquals(6, s.features().longMemory().extractEveryExchanges());
         assertEquals(20, s.features().longMemory().maxNotesPerPlayer());
         assertEquals("sqlite", s.storage().type());
+    }
+
+    /** What a 2.1.0 install of the final config looks like (version 3, long-term memory present, nothing of 2.2.0). */
+    private static final String V3 = """
+            config-version: 3
+            locale: en
+            api-key: sk-abcdefghijkl
+            interval-seconds: 45
+            long-term-memory:
+              enabled: true
+              retrieval-top-k: 9
+            """;
+
+    @Test
+    void versionThreeConfigGetsTheAwarenessSectionsOffByDefaultAndKeepsItsValues() throws Exception {
+        YamlConfiguration user = load(V3);
+        YamlConfiguration defaults = bundled();
+        assertTrue(ConfigUpdater.merge(user, defaults) > 0);
+        String out = user.saveToString();
+        assertEquals(4, user.getInt(ConfigUpdater.VERSION_KEY));
+        assertEquals(45, user.getInt("interval-seconds"));
+        assertTrue(user.getBoolean("long-term-memory.enabled"));
+        assertEquals(9, user.getInt("long-term-memory.retrieval-top-k"));
+        for (String section : java.util.List.of("server-context", "mood", "relationships", "boredom", "supervision")) {
+            assertTrue(user.isConfigurationSection(section), section);
+            assertFalse(user.getBoolean(section + ".enabled"), section + " must be off by default");
+            assertFalse(user.getComments(section).isEmpty(), section + " has no comment");
+        }
+        assertTrue(out.contains("PRIVACY"), out);
+        YamlConfiguration again = load(out);
+        assertEquals(0, ConfigUpdater.merge(again, defaults));
+        assertEquals(out, again.saveToString());
+
+        Logger log = Logger.getLogger("ConfigUpdaterTest");
+        log.setLevel(Level.OFF);
+        Awareness a = Settings.load(again, log).features().awareness();
+        assertEquals(Awareness.defaults(), a);
     }
 }

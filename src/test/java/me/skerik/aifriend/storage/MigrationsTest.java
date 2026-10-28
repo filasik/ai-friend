@@ -43,7 +43,7 @@ class MigrationsTest {
     void appendedVersionsUpgradeAnExistingDatabase() throws Exception {
         Path file = dir.resolve("upgrade.db");
         try (Database db = new Database(DbConfig.sqlite(file, 2))) {
-            assertEquals(1, Migrations.migrate(db));
+            assertEquals(1, Migrations.migrate(db, 1)); // an installation of 2.1.0
             new PlayerNotesStore(db).add(UUID.randomUUID(), "Steve", "builds a castle", null, null, 1000L).join();
         }
         List<List<String>> next = List.of(
@@ -52,7 +52,7 @@ class MigrationsTest {
         List<List<String>> all = new java.util.ArrayList<>(Migrations.shipped());
         all.addAll(next);
         try (Database db = new Database(DbConfig.sqlite(file, 2))) {
-            // pretend two more versions were appended: version 1 is already applied, so only the new steps run
+            // pretend two more versions were appended: the shipped ones that already ran are skipped, only the new steps run
             int latest = all.size();
             assertEquals(latest, Migrations.migrate(db, all, latest));
             assertEquals(latest, Migrations.migrate(db, all, latest));
@@ -84,5 +84,29 @@ class MigrationsTest {
             Migrations.migrate(db);
             assertEquals(0L, new PlayerNotesStore(db).count().join());
         }
+    }
+
+    /** An installation of 2.1.0 (schema v1, notes inside) is upgraded to v2 by 2.2.0 and keeps its notes. */
+    @Test
+    void version1DatabaseGainsTheRelationshipsTableAndKeepsItsNotes() throws Exception {
+        Path file = dir.resolve("v1.db");
+        UUID player = UUID.randomUUID();
+        try (Database db = new Database(DbConfig.sqlite(file, 2))) {
+            assertEquals(1, Migrations.migrate(db, 1));
+            new PlayerNotesStore(db).add(player, "Steve", "builds a castle", null, null, 1000L).join();
+        }
+        try (Database db = new Database(DbConfig.sqlite(file, 2))) {
+            assertEquals(2, Migrations.migrate(db));
+            assertEquals(1L, new PlayerNotesStore(db).count().join());
+            RelationshipStore store = new RelationshipStore(db);
+            store.save(List.of(new me.skerik.aifriend.chat.Relationships.Entry(player, "Steve", 3, 1L, 2L, null)));
+            assertEquals(3, store.loadAll().getFirst().interactions());
+        }
+    }
+
+    @Test
+    void relationshipsTableWorksInTheMariaDbDialectToo() {
+        String sql = Migrations.dialect(Migrations.shipped().get(1).getFirst(), DbConfig.Dialect.MARIADB);
+        assertTrue(sql.contains("aifriend_relationships") && sql.contains("utf8mb4") && !sql.contains("{"), sql);
     }
 }

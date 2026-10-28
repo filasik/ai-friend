@@ -16,14 +16,15 @@ import org.bukkit.configuration.file.FileConfiguration;
 public record ChatFeatures(
         PersonaSelector.Config personas, ConversationMemory.Config memory, RateLimiter.Config limits,
         CostTracker.Config cost, ReplyFilter.Config replyFilter, MentionDetector.Config mentions,
-        OptOutStore.Config optOut, EventPrompts.Config events, LongTermMemory.Config longMemory
+        OptOutStore.Config optOut, EventPrompts.Config events, LongTermMemory.Config longMemory,
+        Awareness awareness
 ) {
 
     public static ChatFeatures defaults() {
         return new ChatFeatures(PersonaSelector.Config.defaults(), ConversationMemory.Config.defaults(),
                 RateLimiter.Config.defaults(), CostTracker.Config.defaults(), ReplyFilter.Config.defaults(),
                 MentionDetector.Config.defaults(), OptOutStore.Config.defaults(), EventPrompts.Config.defaults(),
-                LongTermMemory.Config.defaults());
+                LongTermMemory.Config.defaults(), Awareness.defaults());
     }
 
     public static ChatFeatures load(FileConfiguration c, Logger log) {
@@ -36,6 +37,7 @@ public record ChatFeatures(
                 MentionDetector.Config.load(c.getConfigurationSection("mentions"), log),
                 OptOutStore.Config.load(c.getConfigurationSection("opt-out"), log),
                 EventPrompts.Config.load(c.getConfigurationSection("events"), log),
-                LongTermMemory.Config.load(c.getConfigurationSection("long-term-memory"), log));
+                LongTermMemory.Config.load(c.getConfigurationSection("long-term-memory"), log),
+                Awareness.load(c, log));
     }
 }

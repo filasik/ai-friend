@@ -12,7 +12,10 @@ import org.jspecify.annotations.Nullable;
  * PlaceholderAPI expansion; it only reads in-memory state, so it is safe on the main thread.
  * <ul>
  *   <li>{@code %aifriend_state%} running, disabled, no-key, sleeping or backoff</li>
- *   <li>{@code %aifriend_mood%} happy (running), sleepy (sleeping), confused (waiting after an error), off</li>
+ *   <li>{@code %aifriend_mood%} the mood (thrilled, cheerful, calm, uneasy, upset) when {@code mood.enabled}; otherwise
+ *       happy (running), sleepy (sleeping), confused (waiting after an error), off</li>
+ *   <li>{@code %aifriend_relationship%} how well the bot knows the player: stranger, acquaintance, regular, friend (empty when off)</li>
+ *   <li>{@code %aifriend_nickname%} the nickname the player chose (empty when none)</li>
  *   <li>{@code %aifriend_lastmessage%} the last thing the bot said</li>
  *   <li>{@code %aifriend_provider%} id of the provider that answers</li>
  *   <li>{@code %aifriend_queued%} chat lines waiting for the next answer</li>
@@ -55,12 +58,21 @@ public final class AiFriendExpansion extends PlaceholderExpansion {
         ChatBot.Status st = ctx.bot.status();
         return switch (params.toLowerCase(Locale.ROOT)) {
             case "state" -> st.state().name().toLowerCase(Locale.ROOT).replace('_', '-');
-            case "mood" -> switch (st.state()) {
-                case RUNNING -> "happy";
-                case SLEEPING -> "sleepy";
-                case BACKOFF -> "confused";
-                case DISABLED, NO_KEY -> "off";
-            };
+            case "mood" -> st.state() == ChatBot.State.RUNNING && ctx.bot.mood().isPresent()
+                    ? ctx.bot.mood().get().id()
+                    : switch (st.state()) {
+                        case RUNNING -> "happy";
+                        case SLEEPING -> "sleepy";
+                        case BACKOFF -> "confused";
+                        case DISABLED, NO_KEY -> "off";
+                    };
+            case "relationship" -> player == null || !ctx.bot.relationshipsEnabled() ? ""
+                    : ctx.bot.relationshipOf(player.getUniqueId()).level().name().toLowerCase(Locale.ROOT);
+            case "nickname" -> {
+                if (player == null || !ctx.bot.relationshipsEnabled()) yield "";
+                String nick = ctx.bot.relationshipOf(player.getUniqueId()).nickname();
+                yield nick == null ? "" : nick;
+            }
             case "lastmessage" -> ctx.bot.lastMessage();
             case "provider" -> st.provider();
             case "queued" -> Integer.toString(st.queued());

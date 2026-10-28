@@ -7,7 +7,7 @@
 # Config format version. Do not change: when you update the plugin, options that are new in the
 # newer version are added to this file automatically (your values stay, a backup is saved first).
 # Options of AI Friend 1.x (openai_api_key, gpt_version, ...) are renamed automatically on the first start.
-config-version: 3
+config-version: 4
 
 # Language of the plugin's own messages (commands, status): en, cs.
 # The files plugins/ai-friend/messages_<locale>.yml are yours to edit; missing keys fall back to the built-in text.
@@ -287,3 +287,89 @@ long-term-memory:
     model: ""
     # Empty = the base-url of that provider.
     base-url: ""
+
+# ============================================================================
+#  World awareness and personality (new in 2.2.0). Everything below is off by default.
+# ============================================================================
+
+# --- Server context --------------------------------------------------------------------------------
+# The bot gets a short picture of the server with every request: how many players are online and, for the players who
+# just wrote, their world, biome, the hostile mobs near them ("a creeper is behind you") and the time of day and weather
+# THAT PLAYER sees (other worlds, Multiverse, and per-player time/weather from Residence or /ptime are respected; the
+# Nether and the End have no day cycle and give none). It never
+# gets coordinates, inventories, IP addresses or anything about players who did not write. Muted players are left out.
+# PRIVACY: this information goes to your AI provider together with the chat lines. Switch off what you do not want to share.
+server-context:
+  enabled: false
+  # How often (seconds, 5-600) the picture is refreshed (only while somebody is online).
+  refresh-seconds: 30
+  # At most this many players are looked at per refresh (1-200).
+  max-players: 30
+  time: true
+  weather: true
+  # Name of the world a player is in.
+  world: true
+  biome: true
+  # The hostile mobs within radius blocks of the player, e.g. "2 zombie, 1 skeleton".
+  nearby-mobs: true
+  radius: 16
+
+# --- Mood ---------------------------------------------------------------------------------------------
+# The bot has a mood that game events push around and that fades back to calm: advancements and boss kills cheer it up,
+# deaths (many at once: more), and repeated explosions (looks like griefing) make it uneasy. The mood is a hint in the prompt
+# ("be a bit more upset") and shows in %aifriend_mood% and /aifriend status. It works without the events: reactions section.
+mood:
+  enabled: false
+  # After this many minutes half of the mood is gone (1-1440).
+  half-life-minutes: 30
+
+# --- Relationships -------------------------------------------------------------------------------------
+# The bot gets to know players: every answered exchange a player takes part in counts. Strangers, acquaintances, regulars
+# and friends are treated differently (a friend is greeted warmly, maybe with a nickname). Players can pick the nickname
+# themselves with /aifriend nickname <text> (checked against the reply filter, up to 24 characters).
+# The data (UUID, last name, counter, first/last seen, nickname) is stored in the database from the storage section
+# (SQLite by default). /aifriend forget deletes it (together with the long-term notes), muting the bot deletes it too.
+relationships:
+  enabled: false
+  # Answered exchanges needed for each level (they must grow: acquaintance < regular < friend).
+  acquaintance-after: 5
+  regular-after: 25
+  friend-after: 80
+  # Let players choose a nickname (/aifriend nickname).
+  nicknames: true
+
+# --- Boredom: starting conversations --------------------------------------------------------------------
+# When the chat has been quiet for a while, the bot may start a conversation: a topic, a quiz question, a small challenge, a
+# joke or a Minecraft fact. It only does that while at least min-players are online (an empty server is never "bored"),
+# never when it is asleep or rate limited, and it waits longer and longer when nobody reacts.
+boredom:
+  enabled: false
+  # Nobody (players or the bot) wrote for this many minutes (1-1440).
+  quiet-minutes: 10
+  # Minimum time between two conversation starters (1-1440). Doubles (up to 8 times) while players do not react.
+  cooldown-minutes: 30
+  # How many players must be online (1-200). 1 = it also talks to a single player.
+  min-players: 1
+  # At most this many starters per day (1-200).
+  max-per-day: 10
+  # What the bot may start with: topic, quiz, challenge, joke, fact.
+  ideas: [topic, quiz, challenge, joke, fact]
+
+# --- Chat supervision --------------------------------------------------------------------------------------
+# A friendly private note to a player who shouts (caps lock), spams or swears. Nothing else happens: no kick, no mute,
+# no ban, nobody else sees it, and nothing is stored (spam detection compares the last lines of a player for a few seconds
+# in memory). Players with aifriend.bypass-supervision and players who muted the bot are skipped.
+# The texts are in messages_<locale>.yml (supervision.caps / spam / language).
+supervision:
+  enabled: false
+  caps: true
+  spam: true
+  swearing: true
+  # Whole words, case-insensitive, accents and common look-alikes (a = @, 0 = o) and repeated letters are ignored.
+  # The list is yours: it is empty so the plugin does not impose a language. Example: [idiot, moron]
+  bad-words: []
+  # CAPS: at least this many letters (4-200), of which at least this percent are capitals (50-100).
+  caps-min-letters: 12
+  caps-percent: 70
+  # The same player is told about the same problem at most every this many seconds (0-3600).
+  cooldown-seconds: 60

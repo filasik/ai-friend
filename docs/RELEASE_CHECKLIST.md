@@ -27,6 +27,12 @@
 - [ ] 2.1.0: `Migrations` is append-only (v1 untouched), `MigrationsTest` green; every later schema change adds a new version plus an upgrade test
 - [ ] 2.1.0: public API (`AiFriendResponseEvent`, `AiFriendApi`) and the PlaceholderAPI expansion are in the README and the listings and verified with a real PlaceholderAPI
 - [ ] 2.1.0: `CHANGELOG.md` has a `## 2.1.0` heading (release.yml extracts the section by it)
+- [ ] 2.2.0: every phase 5 feature (`server-context`, `mood`, `relationships`, `boredom`, `supervision`) is OFF in a fresh `config.yml`; upgrade from a real 2.1.0 `config.yml`: `config-version: 4`, five new sections with comments, own values kept, `config.yml.bak-v3` written
+- [ ] 2.2.0: live test `testServer1_Paper26_3/bots/run-aiaware.sh` (real provider) passes: supervision notes, server context in the request (no coordinates), mood, relationships incl. restart and `forget`, boredom only with a player online
+- [ ] 2.2.0: `Migrations` v2 (`relationships`) appended, v1 untouched, `MigrationsTest` covers the 2.1.0 -> 2.2.0 upgrade; MariaDB not live-tested (like v1)
+- [ ] 2.2.0: privacy text (README, README.cs, Modrinth, Spigot) matches what server context, relationships and supervision send/store; `forget`, `forget-all` and muting delete the relationship record
+- [ ] 2.2.0: new permissions `aifriend.nickname` and `aifriend.bypass-supervision` in `paper-plugin.yml` and the README tables; `%aifriend_relationship%`, `%aifriend_nickname%`, real `%aifriend_mood%` verified with a real PlaceholderAPI
+- [ ] 2.2.0: `CHANGELOG.md` has a `## 2.2.0` heading; `modrinthId` in `gradle.properties` is the Modrinth project ID (`LbfapIpl`), not the slug
 - [ ] `CHANGELOG.md`, `README.md`, `README.cs.md`, `docs/modrinth.md`, `docs/spigot.bbcode.txt` match the real code (Paper-only note present)
 - [ ] Icon, banner (`scripts/render-assets.sh`), at least 2 gallery images (illustrations labelled as such, unless real screenshots)
 - [ ] README: commands, permissions, configuration, privacy, license

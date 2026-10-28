@@ -63,6 +63,25 @@ command:
     - '<gray>  Persony: <white><persona>'
     - '<gray>  Paměť: <white><turns> výměn'
     - '<gray>  Dlouhodobá paměť: <white><longmemory>'
+  status-awareness:
+    - '<gray>  Kontext serveru: <white><context></white> · nálada: <white><mood>'
+    - '<gray>  Vztahy: <white><relationships></white> · nuda: <white><boredom></white> · dohled: <white><supervision>'
+  awareness:
+    enabled: 'zapnuto'
+    disabled: 'vypnuto'
+  nickname:
+    disabled: '<prefix> <yellow>Přezdívky jsou na tomto serveru vypnuté.'
+    muted: '<prefix> <yellow>Máš bota ztlumeného. Nejdřív použij <white>/aifriend unmute</white>.'
+    invalid: '<prefix> <red>Tahle přezdívka neobsahuje použitelné znaky (písmena, číslice, mezera a _ - . '' ).'
+    rejected: '<prefix> <red>Bot tuhle přezdívku použít nemůže.'
+    set: '<prefix> <green>Bot ti teď může říkat <white><nickname></white>.'
+    cleared: '<prefix> <gray>Tvoje přezdívka je smazaná.'
+    info: '<prefix> <gray>Bot tě zná jako: <white><level></white> · už <white><days></white> dní · přezdívka: <white><nickname></white>. Změníš ji příkazem <white>/aifriend nickname <text></white> nebo <white>/aifriend nickname clear</white>.'
+    level:
+      stranger: 'cizince'
+      acquaintance: 'známého'
+      regular: 'štamgasta'
+      friend: 'kamaráda'
   cost:
     header: '<prefix> <gold>Spotřeba tokenů a odhad ceny'
     lines:
@@ -95,7 +114,7 @@ command:
       FILTERED_OUT: 'odpověď odstranil filtr'
   events:
     status: '<gray>  Reakce na události: <white><types>'
-    off: 'vypnuto'
+    disabled: 'vypnuto'
 
 # Dlouhodobá paměť (/aifriend forget, forget-all, memory). <note> a <player> jsou text hráčů, nikdy se nečtou jako MiniMessage.
 memory:
@@ -110,6 +129,15 @@ memory:
   list-more: '<gray>  ... a dalších <count>'
   list-empty: '<prefix> <gray>Bot si o hráči <player> nic nepamatuje.'
   failed: '<prefix> <red>Databáze paměti vrátila chybu. Koukni do konzole.'
+  forgot-relationship: '<prefix> <green>Hotovo. Bot zapomněl, jak dobře tě zná.'
+  forgot-relationship-player: '<prefix> <green>Bot zapomněl hráče <player>.'
+  forgot-relationship-all: '<prefix> <green>Bot zapomněl všechny hráče, které znal (<count>).'
+
+# Přátelská soukromá upozornění dohledu nad chatem (hráči se jinak nic nestane).
+supervision:
+  caps: '<prefix> <gray>Pssst, tvoje zpráva je dost HLASITÁ. Zkus trochu zvolnit s caps lockem :)'
+  spam: '<prefix> <gray>Pomalu, píšeš velmi rychle nebo se opakuješ. Nech chat chvilku vydechnout :)'
+  language: '<prefix> <gray>Držme chat přátelský, prosím. Všichni tu jsou lidé (nebo boti) s city :)'
 
 update:
   available: '<prefix> <yellow>Je dostupná nová verze: <white><version></white> <click:open_url:''<url>''><aqua>[stáhnout]</aqua></click>'

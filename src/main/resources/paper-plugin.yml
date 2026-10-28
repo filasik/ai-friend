@@ -42,3 +42,9 @@ permissions:
   aifriend.bypass-limits:
     description: Not affected by the cooldown and the daily limits of the rate limiter
     default: op
+  aifriend.nickname:
+    description: Pick a nickname the bot may call you (/aifriend nickname)
+    default: true
+  aifriend.bypass-supervision:
+    description: No friendly notes about caps lock, spam or language (chat supervision)
+    default: op

@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720" role="img" aria-label="Illustration of AI Friend world awareness">
+  <title>AI Friend world awareness (illustration)</title>
+  <defs><linearGradient id="night" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#101a3a"/><stop offset="1" stop-color="#2b3f5c"/></linearGradient></defs>
+  <rect width="1280" height="720" fill="url(#night)"/>
+  <rect x="0" y="500" width="1280" height="220" fill="#2f4f2a"/>
+  <rect x="0" y="500" width="1280" height="12" fill="#233d20"/>
+  <circle cx="1090" cy="110" r="46" fill="#e8eef7"/><circle cx="1070" cy="98" r="40" fill="#101a3a"/>
+  <g font-family="Menlo, Consolas, monospace" font-size="24">
+    <rect x="20" y="300" width="1010" height="360" fill="#000" opacity=".55"/>
+    <text x="36" y="342" fill="#fff">&lt;Steve&gt; is it safe to mine here at night?</text>
+    <text x="36" y="384" fill="#7cffb2">AI Friend: Careful, Steve, two zombies are right behind you in that</text>
+    <text x="36" y="418" fill="#7cffb2">dark forest. Light a torch first!</text>
+    <text x="36" y="466" fill="#aaa">... five quiet minutes later ...</text>
+    <text x="36" y="508" fill="#7cffb2">AI Friend: Quiz time! Which mob drops a Nautilus Shell?</text>
+    <text x="36" y="550" fill="#fff">&lt;Alex&gt; the Drowned!</text>
+    <text x="36" y="592" fill="#7cffb2">AI Friend: Correct, Ally! You really are a regular here :)</text>
+  </g>
+  <g font-family="Helvetica, Arial, sans-serif" font-size="20" fill="#fff">
+    <rect x="1050" y="300" width="210" height="64" rx="8" fill="#000" opacity=".55"/>
+    <text x="1066" y="328" fill="#ffd36b">mood: cheerful</text><text x="1066" y="354" fill="#cfd8e8">night, raining</text>
+    <rect x="1050" y="380" width="210" height="64" rx="8" fill="#000" opacity=".55"/>
+    <text x="1066" y="408" fill="#cfd8e8">Alex: regular</text><text x="1066" y="434" fill="#cfd8e8">nickname: Ally</text>
+    <rect x="1050" y="460" width="210" height="64" rx="8" fill="#000" opacity=".55"/>
+    <text x="1066" y="488" fill="#cfd8e8">private note to</text><text x="1066" y="514" fill="#cfd8e8">players in CAPS</text>
+  </g>
+  <rect x="860" y="670" width="400" height="40" fill="#000" opacity=".6"/>
+  <text x="872" y="697" font-family="Helvetica, Arial, sans-serif" font-size="20" fill="#fff">Illustration, not a game screenshot</text>
+</svg>

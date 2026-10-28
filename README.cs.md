@@ -164,6 +164,7 @@ Všechny jsou ve výchozím stavu **vypnuté** a zapínají se zvlášť, takže
 - **Události ve hře** (`events`): bot může okomentovat smrt, achievement, první připojení hráče, zabití Ender Draka nebo Witheru a (je-li zapnuto) velké výbuchy (`explosion-min-power`). Jen jedna reakce za `cooldown-seconds` pro celý server. Výbuchy bývají časté na rušných survival serverech, proto jsou ve výchozím stavu vypnuté.
 
 - **Dlouhodobá paměť** (`long-term-memory`, `storage`): poznámky o hráčích, které přežijí restart. Viz [Dlouhodobá paměť](#dlouhodobá-paměť) a [Databáze](#databáze).
+- **Vnímání světa a osobnost** (`server-context`, `mood`, `relationships`, `boredom`, `supervision`): bot vidí denní dobu, počasí a okolí hráčů, má náladu, poznává hráče, v tichém chatu začne konverzaci a přátelsky upozorní na caps lock, spam a nadávky. Viz [Vnímání světa a osobnost](#vnímání-světa-a-osobnost).
 
 Příkazem `/aifriend simulate` uvidíte, jak by vypadal další požadavek a co by bot odpověděl, aniž by se cokoli poslalo do chatu.
 
@@ -186,6 +187,20 @@ Volitelná a ve výchozím stavu **vypnutá** (`long-term-memory.enabled`). Bot 
 - Admini: `/aifriend memory <hráč>`, `/aifriend forget <hráč>` a `/aifriend forget-all`. Jméno hráče se hledá mezi online hráči nebo podle jména uloženého u poznámek, takže fungují i offline hráči.
 
 `/aifriend reload` použije všechny volby včetně zapnutí a vypnutí funkce.
+
+## Vnímání světa a osobnost
+
+Novinka ve verzi 2.2.0, vše je ve výchozím stavu **vypnuté** a zapíná se zvlášť (`config.yml`, `/aifriend reload` změny použije).
+
+**Kontext serveru** (`server-context`). S každým požadavkem dostane bot krátký obrázek serveru: kolik hráčů je online a **jen u hráčů, kteří psali v aktuální dávce**, jejich svět, biom, nepřátelské moby do `radius` bloků a denní dobu (morning, afternoon, evening, night, dawn) a počasí, **které ten hráč vidí** (`"2 zombie, 1 creeper"`), takže umí říct „pozor, za tebou je creeper“. Čas a počasí se čtou za každého hráče zvlášť, ne jednou za server: jiné světy (Multiverse) mají vlastní den a počasí a pluginy jako Residence, `/ptime` nebo `/pweather` je nastavují jednotlivému hráči, takže vyhrává hodnota hráče. Světy bez střídání dne a noci (Nether, End, vlastní dimenze) žádnou nedají. Obecný čas a počasí se posílají jen když je všichni hráči vidí stejně; řádky hráčů je obsahují jen tam, kde se liší. Nikdy nedostane souřadnice, inventáře, adresy ani nic o hráčích, kteří nepsali. Obrázek se obnovuje každých `refresh-seconds` na vlákně, které data vlastní (globální úloha a jedna úloha na hráče, takže je bezpečný pro Folii), bot čte jen hotovou kopii. `time`, `weather`, `world`, `biome` a `nearby-mobs` jde vypnout jednotlivě. Vše jde s chatem k vašemu AI poskytovateli, viz [Soukromí a data](#soukromí-a-data).
+
+**Nálada** (`mood`). Číslo od -100 do 100, které se s poločasem (`half-life-minutes`) vrací do klidu. Úspěchy (+8), první připojení hráče (+10) a zabití Ender Draka nebo Witheru (+35) bota rozveselí; smrt (-12), tři smrti během pěti minut (navíc -25) a tři výbuchy síly 3 a víc během dvou minut (vypadá jako griefing, navíc -20) ho srazí. Úroveň (thrilled, cheerful, calm, uneasy, upset) jde do systémového promptu jako nápověda k tónu; nikdy nemění, co bot smí. Funguje i s vypnutými reakcemi `events`, ukazuje ji `/aifriend status` a `%aifriend_mood%` a po restartu začíná klidná.
+
+**Vztahy** (`relationships`). Bot počítá zodpovězené výměny, kterých se hráč účastnil, a podle toho s ním zachází: cizinec, známý (`acquaintance-after`, výchozí 5), štamgast (`regular-after`, 25) a kamarád (`friend-after`, 80). Hráči, kteří nejsou cizinci, jsou v datovém bloku jako `{"relationship":"friend","player":"Alex","known_for_days":12,"nickname":"Ally"}`; pravidla modelu říkají, ať je k kamarádům a štamgastům vřelejší a použije přezdívku. Přezdívku si hráč volí `/aifriend nickname <text>` (písmena, číslice, mezera a `_ - . '`, nejvýše 24 znaků, a kontroluje se i filtrem odpovědí, protože ji bot může říct nahlas; `/aifriend nickname clear` ji smaže, `/aifriend nickname` ukáže, jak bot hráče vidí). Záznamy jsou v [databázi](#databáze) (tabulka `aifriend_relationships`: UUID, poslední jméno, počítadlo, první a poslední čas, přezdívka), načtou se při startu a ukládají se na pozadí každou minutu a při vypnutí; bez databáze žijí v paměti. `/aifriend forget`, `forget <hráč>`, `forget-all` a ztlumení bota je mažou.
+
+**Nuda** (`boredom`). Když nikdo (hráči ani bot) nenapsal `quiet-minutes` minut (výchozí 10), může bot začít konverzaci, vybranou z `ideas`: `topic`, `quiz`, `challenge`, `joke`, `fact`. Podnět je pokyn v důvěryhodné systémové části, takže ho hráč nemůže řídit. Stane se to jen když je **online aspoň `min-players` hráčů** (výchozí 1: bot mluví i s jediným hráčem; zvyšte, pokud ho chcete jen na rušnějších serverech), nikdy na prázdném serveru (klid se počítá od příchodu prvního hráče, ne od odchodu posledního), nikdy když bot spí, je omezený limity nebo čeká po chybě, a nejvýše `max-per-day`krát denně. Mezi dvěma podněty uplyne aspoň `cooldown-minutes` a ta doba se (až osmkrát) zdvojnásobuje za každý podnět, na který nikdo nereagoval, takže prostě prázdný chat není otravován. Podněty se počítají do limitů i odhadu nákladů jako každá odpověď.
+
+**Dohled nad chatem** (`supervision`). Přátelské **soukromé** upozornění hráči, který píše caps lockem (`caps-min-letters` písmen, z toho `caps-percent` velkých), spamuje (stejný řádek třikrát nebo šest řádků za deset sekund) nebo použije slovo ze `bad-words` (celá slova; akcenty, podobné znaky jako `@` nebo `0` a natažená písmena se ignorují; seznam je ve výchozím stavu prázdný, aby plugin nevnucoval jazyk). O stejném problému se hráč dozví nejvýše každých `cooldown-seconds`. Nic dalšího se neděje: žádný kick, mute ani ban, upozornění nikdo jiný nevidí, žádný chat se neukládá (detekce spamu drží v paměti jen hashe posledních řádků hráče po deset sekund) a nevolá se žádná AI. Hráči s `aifriend.bypass-supervision` a hráči, kteří bota ztlumili, se přeskakují. Tři texty jsou v `messages_<locale>.yml` (`supervision.caps`, `supervision.spam`, `supervision.language`).
 
 ## Databáze
 
@@ -212,7 +227,9 @@ AiFriendApi api = Bukkit.getServicesManager().load(AiFriendApi.class); // null, 
 | Placeholder | Hodnota |
 |---|---|
 | `%aifriend_state%` | `running`, `disabled`, `no-key`, `sleeping`, `backoff` |
-| `%aifriend_mood%` | `happy` (běží), `sleepy` (spí), `confused` (čeká po chybě), `off` |
+| `%aifriend_mood%` | S `mood.enabled` nálada: `thrilled`, `cheerful`, `calm`, `uneasy`, `upset`. Jinak `happy` (běží), `sleepy` (spí), `confused` (čeká po chybě), `off` |
+| `%aifriend_relationship%` | Jak dobře bot hráče zná: `stranger`, `acquaintance`, `regular`, `friend` (prázdné, když je `relationships` vypnuté) |
+| `%aifriend_nickname%` | Přezdívka, kterou si hráč zvolil (prázdné, pokud žádná) |
 | `%aifriend_lastmessage%` | Poslední věc, kterou bot řekl |
 | `%aifriend_provider%` | Id poskytovatele, který odpovídá (`-` když žádný) |
 | `%aifriend_queued%` | Řádky chatu čekající na další odpověď |
@@ -229,10 +246,11 @@ AiFriendApi api = Bukkit.getServicesManager().load(AiFriendApi.class); // null, 
 | `/aifriend status` | Stav (zapnuto, spí, pauza po chybě), poskytovatel, persona, paměť, umlčení hráči, maskovaný API klíč, velikost fronty | `aifriend.admin` |
 | `/aifriend reload` | Znovu načte `config.yml` a zprávy | `aifriend.reload` |
 | `/ai <dotaz>` | Zeptá se bota přímo (hráči) | `aifriend.ask` |
+| `/aifriend nickname [text\|clear]` | Zvolte přezdívku, kterou vám smí bot říkat, smažte ji nebo zjistěte, jak vás bot zná (vyžaduje `relationships.enabled`) | `aifriend.nickname` |
 | `/aifriend limits` | Vaše zbývající volání, tokeny a cooldown (hráči) | `aifriend.ask` |
 | `/aifriend mute` / `unmute` | Vypne / zapne bota pro vás (hráči, vyžaduje `opt-out.enabled`) | `aifriend.mute` |
 | `/aifriend memory` | Vypíše poznámky, které si bot o vás pamatuje (vyžaduje dlouhodobou paměť) | `aifriend.mute` |
-| `/aifriend forget` | Smaže vaše poznámky (funguje i když jste bota ztlumili) | `aifriend.mute` |
+| `/aifriend forget` | Smaže vaše poznámky a to, co o vás bot ví (funguje i když jste bota ztlumili) | `aifriend.mute` |
 | `/aifriend memory <hráč>` | Vypíše poznámky o hráči (i offline) | `aifriend.admin` |
 | `/aifriend forget <hráč>` | Smaže poznámky hráče | `aifriend.admin` |
 | `/aifriend forget-all` | Smaže všechny poznámky | `aifriend.admin` |
@@ -254,6 +272,8 @@ AiFriendApi api = Bukkit.getServicesManager().load(AiFriendApi.class); // null, 
 | `aifriend.simulate` | op | `/aifriend simulate` |
 | `aifriend.cost` | op | `/aifriend cost`, denní upozornění na náklady |
 | `aifriend.bypass-limits` | op | Nevztahuje se na něj cooldown ani denní limity |
+| `aifriend.nickname` | všichni | `/aifriend nickname` |
+| `aifriend.bypass-supervision` | op | Žádná přátelská upozornění na caps lock, spam a jazyk |
 
 ## Konfigurace
 
@@ -389,11 +409,14 @@ Upozornění:
 - S řetězem záložních poskytovatelů jde chat tomu, kdo nakonec odpoví; každý člen řetězu je potenciální příjemce.
 - API klíče jsou jen v `config.yml`, v čistém textu jako každé nastavení pluginu. Soubor držte v soukromí. Klíče jsou maskované v `/aifriend status` a odstraněné z chybových hlášek i logu; posílají se jen v hlavičkách požadavku (u proxy v těle požadavku). Přesměrování se nesledují.
 - Umlčení hráči (`opt-out`) se nikdy neukládají ani neposílají. Seznam (`muted-players.yml`) obsahuje UUID hráčů na vašem serveru.
+- **Vnímání světa** (vše ve výchozím stavu vypnuté). *Kontext serveru* posílá s každým požadavkem denní dobu, počasí, počet hráčů online a u hráčů, kteří psali, jejich svět, biom a nepřátelské moby poblíž (nikdy souřadnice) vašemu AI poskytovateli. *Vztahy* ukládají ve vaší databázi UUID hráče, poslední jméno, počet zodpovězených výměn, první a poslední čas a volitelnou přezdívku, kterou hráč napsal; `/aifriend forget` je smaže, ztlumení bota je smaže a zastaví sběr, a přezdívka s úrovní jdou poskytovateli spolu s řádky chatu daného hráče. *Nálada* a *nuda* drží v paměti jen počítadla. *Dohled nad chatem* čte veřejné řádky jen v paměti (nevolá AI, nic neukládá a hráče, kteří bota ztlumili, nesleduje).
 - Paměť konverzace, limity, součty nákladů a cache jsou jen v paměti a s restartem zmizí (výjimkou je dlouhodobá paměť, viz níže).
 - **Dlouhodobá paměť** (ve výchozím stavu vypnutá) je jediná funkce, která ukládá data o hráčích. Ve vaší vlastní databázi (`storage`) ukládá: UUID hráče, jméno hráče, krátkou poznámku (max 120 znaků, kterou z toho, co hráč řekl sám o sobě, napsal model), kdy vznikla a kdy byla naposledy použita, a případně embedding vektor poznámky. Nic dalšího z chatu se neukládá. **K nalezení poznámek se každých `extract-every-exchanges` odpovědí posílá dodatečný požadavek s posledními řádky chatu (se jmény hráčů) vašemu AI poskytovateli**, a s embeddingy jdou poznámky a text chatu i embedding službě. Řekněte to hráčům. Model má pokyn nic citlivého neukládat a poznámky podobné kontaktním údajům plugin zahodí, ale model se může splést: v případě pochybností zkontrolujte `/aifriend memory <hráč>`. Hráči poznámky vidí a mažou přes `/aifriend memory` a `/aifriend forget`, admini přes `forget <hráč>` a `forget-all`, ztlumení zastaví sběr a (ve výchozím stavu) poznámky smaže a `retention-days` odstraňuje staré. S MariaDB leží poznámky na vašem databázovém serveru a sdílí je všechny servery, které ji používají.
 - Kromě výše uvedeného jsou jedinými dalšími síťovými voláními anonymní statistiky [bStats](https://bstats.org) (vypnete `metrics: false`) a kontrola aktualizací na GitHubu (vypnete `update-check: false`). Žádná další telemetrie neexistuje.
 
 ## Aktualizace
+
+**Z 2.1.0.** Vyměňte jar. Do `config.yml` se doplní `config-version: 4` a nové sekce (`server-context`, `mood`, `relationships`, `boredom`, `supervision`) s komentáři; nejdřív se uloží záloha `config.yml.bak-v3`. Schéma databáze se při dalším startu povýší na v2 (jedna nová tabulka, přidá se při příštím otevření databáze, což se děje jen se zapnutou dlouhodobou pamětí nebo vztahy; stávající poznámky zůstanou). Nic se nezmění, dokud něco nezapnete.
 
 **Z 2.0.0.** Vyměňte jar. Do `config.yml` se doplní `config-version: 3` a nové sekce (`provider`, `personas`, `memory`, `limits`, `cost`, `reply-filter`, `mentions`, `opt-out`, `events`, `storage`, `long-term-memory`) s komentáři; nejdřív se uloží záloha `config.yml.bak-v1`. Nic se nezmění, dokud něco nezapnete: proxy zůstává primárním poskytovatelem a všechny funkce chatu jsou vypnuté. Pro přímé použití OpenAI nebo Claude viz [Nastavení poskytovatele](#nastavení-poskytovatele).
 

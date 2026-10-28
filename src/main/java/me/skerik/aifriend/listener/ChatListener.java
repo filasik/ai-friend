@@ -28,7 +28,8 @@ public final class ChatListener implements Listener {
         Player player = event.getPlayer();
         if (!isPublic(playersAmong(event.viewers()), Bukkit.getOnlinePlayers().size())) return;
         bot.onChat(player.getUniqueId(), player.getName(), PlainTextComponentSerializer.plainText().serialize(event.message()),
-                player.hasPermission("aifriend.ask"), player.hasPermission("aifriend.bypass-limits"));
+                player.hasPermission("aifriend.ask"), player.hasPermission("aifriend.bypass-limits"),
+                player.hasPermission("aifriend.bypass-supervision"));
     }
 
     private static int playersAmong(Iterable<? extends Audience> viewers) {

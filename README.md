@@ -165,6 +165,7 @@ All of these are **off by default** and switched on separately, so upgrading cha
 - **Game events** (`events`): the bot may comment on a death, an advancement, the first join of a player, an Ender Dragon or Wither kill and, if enabled, big explosions (`explosion-min-power`). Only one reaction per `cooldown-seconds` for the whole server. Explosions can be frequent on busy survival servers, so they are off by default.
 
 - **Long-term memory** (`long-term-memory`, `storage`): notes about players that survive restarts. See [Long-term memory](#long-term-memory) and [Database](#database).
+- **World awareness and personality** (`server-context`, `mood`, `relationships`, `boredom`, `supervision`): the bot sees the time, weather and surroundings of the players, has a mood, gets to know players, starts conversations in a quiet chat and gives friendly hints about caps lock, spam and language. See [World awareness and personality](#world-awareness-and-personality).
 
 Use `/aifriend simulate` to see what the next request would look like and what the bot would answer, without posting anything.
 
@@ -188,14 +189,28 @@ Optional and **off by default** (`long-term-memory.enabled`). The bot remembers 
 
 `/aifriend reload` applies every option, including switching the feature on or off.
 
+## World awareness and personality
+
+New in 2.2.0, all **off by default** and switched on separately (`config.yml`, `/aifriend reload` applies them).
+
+**Server context** (`server-context`). With every request the bot gets a short picture of the server: how many players are online and, **only for the players who wrote in the current batch**, their world, biome, the hostile mobs within `radius` blocks and the time of day (morning, afternoon, evening, night, dawn) and weather **that player sees** (`"2 zombie, 1 creeper"`), so it can say "careful, a creeper is behind you". Time and weather are read per player, not once for the server: other worlds (Multiverse) have their own day and weather, and plugins such as Residence, `/ptime` or `/pweather` set them for a single player, so the player's own value wins. Worlds without a day cycle (Nether, End, custom dimensions) give none. The general time and weather are only sent when every player sees the same; the player lines carry them only where they differ. It never gets coordinates, inventories, addresses or anything about players who did not write. The picture is refreshed every `refresh-seconds` on the threads that own the data (global task and one entity task per player, so it is Folia safe) and the bot only reads the finished copy. `time`, `weather`, `world`, `biome` and `nearby-mobs` can be switched off one by one. It all goes to your AI provider with the chat, see [Privacy and data](#privacy-and-data).
+
+**Mood** (`mood`). A number from -100 to 100 that fades back to calm with a half-life (`half-life-minutes`). Advancements (+8), a player's first join (+10) and killing the Ender Dragon or a Wither (+35) cheer the bot up; a death (-12), three deaths within five minutes (an extra -25) and three explosions of power 3 or more within two minutes (looks like griefing, an extra -20) bring it down. The level (thrilled, cheerful, calm, uneasy, upset) goes into the system prompt as a hint for the tone; it never changes what the bot may do. It works even when the `events` reactions are off, shows in `/aifriend status` and as `%aifriend_mood%`, and starts calm after a restart.
+
+**Relationships** (`relationships`). The bot counts the answered exchanges a player took part in and treats players differently as it gets to know them: stranger, acquaintance (`acquaintance-after`, default 5), regular (`regular-after`, 25) and friend (`friend-after`, 80). Players who are not strangers appear in the data block as `{"relationship":"friend","player":"Alex","known_for_days":12,"nickname":"Ally"}`; the rules tell the model to be warmer with friends and regulars and to use the nickname. A player picks the nickname with `/aifriend nickname <text>` (letters, digits, space and `_ - . '`, up to 24 characters, also checked against the reply filter because the bot may say it; `/aifriend nickname clear` removes it, `/aifriend nickname` shows what the bot thinks). The records are kept in the [database](#database) (table `aifriend_relationships`: UUID, last name, counter, first and last time, nickname), loaded at the start and saved in the background every minute and on shutdown; without a database they live in memory. `/aifriend forget`, `forget <player>`, `forget-all` and muting the bot delete them.
+
+**Boredom** (`boredom`). When nobody (players or the bot) has written for `quiet-minutes` (default 10), the bot may start a conversation, chosen from `ideas`: `topic`, `quiz`, `challenge`, `joke`, `fact`. The idea is an instruction in the trusted system part, so a player cannot steer it. It only happens when **at least `min-players` players are online** (default 1: the bot also talks to a single player; raise it if you want it only on busier servers), never on an empty server (the quiet time starts when the first player arrives, not when the last one left), never while the bot is asleep, rate limited or waiting after an error, and at most `max-per-day` times per day. Between two starters at least `cooldown-minutes` pass, and that time doubles (up to 8 times) for every starter nobody reacted to, so a chat that is simply empty is not nagged. Starters count against the rate limits and the cost estimate like any answer.
+
+**Chat supervision** (`supervision`). A friendly **private** note to the player who writes in caps lock (`caps-min-letters` letters, `caps-percent` capitals), spams (the same line three times or six lines within ten seconds) or uses a word from `bad-words` (whole words; accents, look-alike characters such as `@` or `0` and stretched letters are ignored; the list is empty by default so the plugin does not impose a language). The same problem is mentioned at most every `cooldown-seconds`. Nothing else happens: no kick, mute or ban, nobody else sees the note, no chat is stored (spam detection keeps hashes of a player's last lines in memory for ten seconds) and no AI request is made. Players with `aifriend.bypass-supervision` and players who muted the bot are skipped. The three texts are in `messages_<locale>.yml` (`supervision.caps`, `supervision.spam`, `supervision.language`).
+
 ## Database
 
-The `storage` section configures the database for features that keep data (currently only long-term memory; nothing is created while they are off). Two types:
+The `storage` section configures the database for features that keep data (long-term memory and relationships; nothing is created while they are off). Two types:
 
 - `sqlite` (default): one file in the plugin folder (`storage.sqlite.file`, default `ai-friend.db`). No setup.
-- `mariadb`: a MariaDB or MySQL server (`storage.mariadb.*`: host, port, database, user, password, pool-size, `ssl-mode`). Use it to share notes between servers of a network. The tables are prefixed `aifriend_` so they can live in a shared database.
+- `mariadb`: a MariaDB or MySQL server (`storage.mariadb.*`: host, port, database, user, password, pool-size, `ssl-mode`). Use it to share notes and relationships between servers of a network. The tables are prefixed `aifriend_` so they can live in a shared database.
 
-The JDBC drivers and the connection pool are downloaded from Maven Central together with the other libraries on the first start. All database access is asynchronous, never on the main thread. The schema is versioned (table `aifriend_schema_version`) and upgraded automatically on start; later releases only append new steps. If the database cannot be opened, one line is logged and only long-term memory stays off, the bot keeps running.
+The JDBC drivers and the connection pool are downloaded from Maven Central together with the other libraries on the first start. All database access is asynchronous, never on the main thread. The schema is versioned (table `aifriend_schema_version`) and upgraded automatically on start; later releases only append new steps. If the database cannot be opened, one line is logged and only long-term memory and the saved relationships stay off, the bot keeps running.
 
 ## Integrations
 
@@ -213,7 +228,9 @@ AiFriendApi api = Bukkit.getServicesManager().load(AiFriendApi.class); // null u
 | Placeholder | Value |
 |---|---|
 | `%aifriend_state%` | `running`, `disabled`, `no-key`, `sleeping`, `backoff` |
-| `%aifriend_mood%` | `happy` (running), `sleepy` (sleeping), `confused` (waiting after an error), `off` |
+| `%aifriend_mood%` | The mood with `mood.enabled`: `thrilled`, `cheerful`, `calm`, `uneasy`, `upset`. Otherwise `happy` (running), `sleepy` (sleeping), `confused` (waiting after an error), `off` |
+| `%aifriend_relationship%` | How well the bot knows the player: `stranger`, `acquaintance`, `regular`, `friend` (empty when `relationships` is off) |
+| `%aifriend_nickname%` | The nickname the player chose (empty if none) |
 | `%aifriend_lastmessage%` | The last thing the bot said |
 | `%aifriend_provider%` | Id of the provider that answers (`-` if none) |
 | `%aifriend_queued%` | Chat lines waiting for the next answer |
@@ -230,10 +247,11 @@ AiFriendApi api = Bukkit.getServicesManager().load(AiFriendApi.class); // null u
 | `/aifriend status` | State (enabled, sleeping, backoff), provider, persona, memory, muted players, masked API key, queue size | `aifriend.admin` |
 | `/aifriend reload` | Reload `config.yml` and messages | `aifriend.reload` |
 | `/ai <question>` | Ask the bot directly (players) | `aifriend.ask` |
+| `/aifriend nickname [text\|clear]` | Pick the nickname the bot may call you, remove it, or show how well the bot knows you (needs `relationships.enabled`) | `aifriend.nickname` |
 | `/aifriend limits` | Your remaining calls, tokens and cooldown (players) | `aifriend.ask` |
 | `/aifriend mute` / `unmute` | Switch the bot off / on for yourself (players, needs `opt-out.enabled`) | `aifriend.mute` |
 | `/aifriend memory` | List the notes the bot remembers about you (needs long-term memory) | `aifriend.mute` |
-| `/aifriend forget` | Delete your own notes (works even when you muted the bot) | `aifriend.mute` |
+| `/aifriend forget` | Delete your own notes and what the bot knows about you (works even when you muted the bot) | `aifriend.mute` |
 | `/aifriend memory <player>` | List the notes about a player (also offline) | `aifriend.admin` |
 | `/aifriend forget <player>` | Delete a player's notes | `aifriend.admin` |
 | `/aifriend forget-all` | Delete all notes | `aifriend.admin` |
@@ -255,6 +273,8 @@ AiFriendApi api = Bukkit.getServicesManager().load(AiFriendApi.class); // null u
 | `aifriend.simulate` | op | `/aifriend simulate` |
 | `aifriend.cost` | op | `/aifriend cost`, daily cost warning |
 | `aifriend.bypass-limits` | op | Not affected by cooldown and daily limits |
+| `aifriend.nickname` | everyone | `/aifriend nickname` |
+| `aifriend.bypass-supervision` | op | No friendly notes about caps lock, spam or language |
 
 ## Configuration
 
@@ -391,10 +411,13 @@ Please note:
 - API keys live only in `config.yml`, in plain text like any plugin setting. Keep that file private. Keys are masked in `/aifriend status` and removed from error messages and the log; they are sent only in request headers (or, for the proxy, in the request body). Redirects are not followed.
 - Muted players (`opt-out`) are never stored or sent. The mute list (`muted-players.yml`) holds player UUIDs on your server.
 - **Long-term memory** (off by default) is the one feature that stores player data. It stores, in your own database (`storage`): the player UUID, the player name, a short note (max 120 characters, written by the model from what the player said about themselves), when it was made and last used, and optionally an embedding vector of the note. Nothing else of the chat is saved. To find the notes, **an extra request sends the recent chat lines (with player names) to your AI provider every `extract-every-exchanges` answers**, and with embeddings the notes and chat text also go to the embedding service. Tell your players. The model is told to keep nothing sensitive, notes that look like contact data are dropped by the plugin, but a model can make mistakes: review `/aifriend memory <player>` if in doubt. Players see and delete their notes with `/aifriend memory` and `/aifriend forget`, admins with `forget <player>` and `forget-all`, muting stops collection and (by default) deletes the notes, and `retention-days` removes old ones. With MariaDB the notes live on your database server and are shared by all servers that use it.
+- **World awareness** (all off by default). *Server context* sends, with every request, the time, the weather, the number of players online and, for the players who wrote, their world, biome and nearby hostile mobs (never coordinates) to your AI provider. *Relationships* store, in your own database, the player UUID, the last name, the number of answered exchanges, the first and last time and an optional nickname the player typed; `/aifriend forget` deletes it, muting the bot deletes it and stops collecting, and the nickname and level are sent to the provider with the chat lines of that player. *Mood* and *boredom* keep only counters in memory. *Chat supervision* reads public chat lines in memory only (it makes no request, stores nothing and does not look at players who muted the bot).
 - Conversation memory, limits, cost totals and the cache are kept in memory only and are lost on restart (long-term memory is the exception, see above).
 - Besides the above, the only other network calls are anonymous [bStats](https://bstats.org) statistics (turn off with `metrics: false`) and the GitHub update check (turn off with `update-check: false`). There is no other telemetry.
 
 ## Upgrading
+
+**From 2.1.0.** Drop the new jar in place of the old one. Your `config.yml` gets `config-version: 4` and the new sections (`server-context`, `mood`, `relationships`, `boredom`, `supervision`) with comments; a backup `config.yml.bak-v3` is saved first. The database schema is upgraded to v2 on the next start (one new table, added the next time the database is opened, which happens only when long-term memory or relationships are enabled; existing notes are untouched). Nothing changes until you enable something.
 
 **From 2.0.0.** Drop the new jar in place of the old one. Your `config.yml` gets `config-version: 3` and the new sections (`provider`, `personas`, `memory`, `limits`, `cost`, `reply-filter`, `mentions`, `opt-out`, `events`, `storage`, `long-term-memory`) with comments; a backup `config.yml.bak-v1` is saved first. Long-term memory and the database stay off/unused until you enable them. Nothing changes until you enable something: the proxy stays the primary provider, and all chat features are off. To use OpenAI or Claude directly, follow [Provider setup](#provider-setup).
 
@@ -408,7 +431,7 @@ See the [CHANGELOG](CHANGELOG.md) for details.
 
 ## Not done yet
 
-Direct OpenAI/Claude/Ollama/custom calls, the chat features above, long-term memory, the public API and the PlaceholderAPI expansion are implemented. Still planned (see [ROADMAP.md](ROADMAP.md)): a Dynmap hook, persistence of the cache, limits and cost totals across restarts, and the later phases (world awareness, games, player help, admin tools).
+Direct OpenAI/Claude/Ollama/custom calls, the chat features above, long-term memory, world awareness and personality, the public API and the PlaceholderAPI expansion are implemented. Still planned (see [ROADMAP.md](ROADMAP.md)): several bots at once, a Dynmap hook, persistence of the cache, limits and cost totals across restarts, and the later phases (games, player help, admin tools).
 
 ## FAQ and troubleshooting
 

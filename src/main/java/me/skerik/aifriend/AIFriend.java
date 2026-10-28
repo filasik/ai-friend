@@ -20,6 +20,8 @@ import me.skerik.aifriend.longmemory.LongTermMemory;
 import me.skerik.aifriend.storage.Database;
 import me.skerik.aifriend.storage.Migrations;
 import me.skerik.aifriend.storage.PlayerNotesStore;
+import me.skerik.aifriend.storage.RelationshipStore;
+import me.skerik.aifriend.world.ContextCollector;
 import java.sql.SQLException;
 import java.util.logging.Level;
 import me.skerik.aifriend.papi.AiFriendExpansion;
@@ -88,7 +90,7 @@ public final class AIFriend extends JavaPlugin implements Listener {
             event.registrar().register(command.buildAsk(), "Ask the AI Friend a question");
         });
         getServer().getPluginManager().registerEvents(this, this);
-        if (settings.features().longMemory().enabled()) {
+        if (needsDatabase(settings)) {
             scheduler.runAsync(() -> {
                 openDatabase();
                 scheduler.runGlobal(this::finishStartup);
@@ -98,7 +100,12 @@ public final class AIFriend extends JavaPlugin implements Listener {
         }
     }
 
-    /** Opens the pool and runs the migrations (blocking, async threads only). A failure disables long-term memory only. */
+    /** The database is only opened for the features that keep data in it. */
+    private static boolean needsDatabase(Settings s) {
+        return s.features().longMemory().enabled() || s.features().awareness().relationships().enabled();
+    }
+
+    /** Opens the pool and runs the migrations (blocking, async threads only). A failure disables the data features only. */
     private synchronized boolean openDatabase() {
         if (database != null) return true;
         Settings.Storage storage = settings.storage();
@@ -117,7 +124,7 @@ public final class AIFriend extends JavaPlugin implements Listener {
             String hint = String.valueOf(e.getMessage()).contains("Self signed")
                     ? " Hint: set storage.mariadb.ssl-mode to \"trust\" in config.yml (MySQL with a self-signed certificate)."
                     : "";
-            getLogger().log(Level.SEVERE, "Long-term memory is switched off: cannot open the database (" + storage.describe()
+            getLogger().log(Level.SEVERE, "Long-term memory and saved relationships are switched off: cannot open the database (" + storage.describe()
                     + "): " + e.getMessage() + ". Check storage in config.yml." + hint + " The chatbot keeps running.");
             return false;
         }
@@ -136,23 +143,25 @@ public final class AIFriend extends JavaPlugin implements Listener {
     }
 
     /**
-     * Makes the bot's long-term memory match the current settings (async thread): opens or closes the database when
-     * {@code long-term-memory.enabled} or {@code storage} changed, rebuilds the memory with the new values.
+     * Makes the data features of the bot (long-term memory, relationships) match the current settings (async thread):
+     * opens or closes the database when the features or {@code storage} changed, rebuilds them with the new values.
      */
-    private synchronized void syncLongMemory() {
+    private synchronized void syncStorage() {
         Context ctx = context;
         if (shuttingDown || ctx == null) return;
         Settings s = settings;
-        boolean want = s.features().longMemory().enabled();
+        boolean want = needsDatabase(s);
         if (database != null && (!want || !s.storage().equals(openStorage))) {
+            ctx.bot.flush(); // pending relationship changes still need the old database
             ctx.bot.setLongMemory(null);
+            ctx.bot.relationships().attach(null);
             closeDatabase();
         }
         if (want && database == null) openDatabase();
         installLongMemory(ctx.bot);
     }
 
-    /** Hands the bot a {@link LongTermMemory} for the open database, or none. No I/O (safe on the main thread). */
+    /** Hands the bot a {@link LongTermMemory} and the relationship store for the open database, or none. No I/O (safe on the main thread). */
     private synchronized void installLongMemory(ChatBot bot) {
         Settings s = settings;
         Database db = database;
@@ -162,6 +171,18 @@ public final class AIFriend extends JavaPlugin implements Listener {
                     s.features().longMemory(), System::currentTimeMillis, getLogger()));
         } else {
             bot.setLongMemory(null);
+        }
+        boolean rel = s.features().awareness().relationships().enabled() && db != null;
+        boolean alreadyAttached = bot.relationships().persistent();
+        bot.relationships().attach(rel ? new RelationshipStore(db) : null);
+        if (rel && !alreadyAttached) {
+            scheduler.runAsync(() -> {
+                try {
+                    bot.relationships().load();
+                } catch (SQLException | RuntimeException e) {
+                    getLogger().warning("Relationships: could not read the saved records (" + e.getMessage() + ")");
+                }
+            });
         }
     }
 
@@ -200,6 +221,9 @@ public final class AIFriend extends JavaPlugin implements Listener {
         context = new Context(this, scheduler, settings, messages, bot);
         getServer().getPluginManager().registerEvents(new ChatListener(bot), this);
         getServer().getPluginManager().registerEvents(new GameEventListener(bot), this);
+        ContextCollector collector = new ContextCollector(scheduler, () -> settings.features().awareness().context(),
+                System::currentTimeMillis);
+        bot.setContextSource(collector::snapshot);
         bot.setInterceptor((name, text, asker, source) -> {
             AiFriendResponseEvent event = new AiFriendResponseEvent(name, text, asker,
                     source == ChatBot.Source.DIRECT ? AiFriendResponseEvent.Source.DIRECT : AiFriendResponseEvent.Source.TIMED);
@@ -244,6 +268,9 @@ public final class AIFriend extends JavaPlugin implements Listener {
         installLongMemory(bot);
         bot.start();
         timers.add(bot::stop);
+        // world picture for the prompt (does the work only when a refresh is due) and saving the relationships
+        timers.add(scheduler.runAsyncTimer(collector::tick, 100L, 200L));
+        timers.add(scheduler.runAsyncTimer(bot::flushRelationships, 60L * 20, 60L * 20));
         // retention-days and max-notes-per-player, once a day (and a few minutes after the start)
         timers.add(scheduler.runAsyncTimer(() -> {
             LongTermMemory ltm = bot.longMemory();
@@ -271,10 +298,18 @@ public final class AIFriend extends JavaPlugin implements Listener {
         details.put("Bot", !settings.enabled() ? "disabled in config.yml"
                 : status.state() == ChatBot.State.NO_KEY ? "idle, no usable provider"
                 : settings.chatbotName() + " via " + status.provider() + " (every " + settings.intervalSeconds() + " s)");
-        if (settings.features().longMemory().enabled()) {
-            details.put("Memory", database == null ? "long-term memory OFF (database unavailable)"
-                    : "long-term notes in " + openStorage.describe() + " (schema v" + schemaVersion + ")");
+        if (needsDatabase(settings)) {
+            details.put("Memory", database == null ? "long-term memory / relationships OFF (database unavailable)"
+                    : "data in " + openStorage.describe() + " (schema v" + schemaVersion + ")");
         }
+        var aw = settings.features().awareness();
+        List<String> awake = new java.util.ArrayList<>();
+        if (aw.context().enabled()) awake.add("context");
+        if (aw.mood().enabled()) awake.add("mood");
+        if (aw.relationships().enabled()) awake.add("relationships");
+        if (aw.boredom().enabled()) awake.add("boredom");
+        if (aw.supervision().enabled()) awake.add("supervision");
+        if (!awake.isEmpty()) details.put("Awareness", String.join(", ", awake));
         details.put("Language", settings.language() + " / messages " + settings.locale() + "   Updates " + (settings.updateCheck() ? "on" : "off"));
         Banner.print(getComponentLogger(), version, getServer().getMinecraftVersion(), details,
                 (System.nanoTime() - enableStarted) / 1_000_000);
@@ -306,7 +341,7 @@ public final class AIFriend extends JavaPlugin implements Listener {
         if (ctx != null) {
             ctx.update(settings, messages);
             ctx.bot.reload(settings);
-            scheduler.runAsync(this::syncLongMemory);
+            scheduler.runAsync(this::syncStorage);
         }
     }
 
@@ -325,8 +360,9 @@ public final class AIFriend extends JavaPlugin implements Listener {
         timers.clear();
         Context ctx = context;
         if (ctx != null) {
-            ctx.bot.setLongMemory(null);
             ctx.bot.flush();
+            ctx.bot.setLongMemory(null);
+            ctx.bot.relationships().attach(null);
         }
         closeDatabase();
         context = null;

@@ -94,6 +94,12 @@ public final class MainCommand {
                                 .suggests(this::suggestPlayers)
                                 .executes(c -> withContext(c, ctx -> memoryOf(ctx, c.getSource().getSender(),
                                         StringArgumentType.getString(c, "player"))))))
+                .then(Commands.literal("nickname")
+                        .requires(src -> src.getSender().hasPermission("aifriend.nickname"))
+                        .executes(c -> player(c, this::nicknameInfo))
+                        .then(Commands.literal("clear").executes(c -> player(c, (ctx, p) -> nickname(ctx, p, ""))))
+                        .then(Commands.argument("nickname", StringArgumentType.greedyString())
+                                .executes(c -> player(c, (ctx, p) -> nickname(ctx, p, StringArgumentType.getString(c, "nickname"))))))
                 .then(Commands.literal("limits")
                         .requires(src -> src.getSender().hasPermission("aifriend.ask"))
                         .executes(c -> player(c, this::limits)))
@@ -165,6 +171,19 @@ public final class MainCommand {
                 Messages.text("longmemory", st.longMemory()))) {
             sender.sendMessage(line);
         }
+        var aw = s.features().awareness();
+        Component off = m.get("command.awareness.disabled");
+        Component on = m.get("command.awareness.enabled");
+        for (Component line : m.list("command.status-awareness",
+                Messages.comp("context", aw.context().enabled() ? on : off),
+                Messages.text("mood", ctx.bot.mood().map(l -> l.id() + " (" + ctx.bot.moodScore() + ")").orElse(plain(off))),
+                Messages.text("relationships", aw.relationships().enabled()
+                        ? ctx.bot.relationships().size() + " known" + (ctx.bot.relationships().persistent() ? "" : ", memory only")
+                        : plain(off)),
+                Messages.comp("boredom", aw.boredom().enabled() ? on : off),
+                Messages.comp("supervision", aw.supervision().enabled() ? on : off))) {
+            sender.sendMessage(line);
+        }
         return Command.SINGLE_SUCCESS;
     }
 
@@ -223,6 +242,11 @@ public final class MainCommand {
     }
 
     private void forgetOwn(Context ctx, Player p) {
+        boolean relationship = ctx.bot.forgetRelationship(p.getUniqueId());
+        if (relationship && ctx.bot.longMemory() == null) {
+            p.sendMessage(ctx.messages().get("memory.forgot-relationship"));
+            return;
+        }
         LongTermMemory ltm = memoryOrExplain(ctx, p);
         if (ltm == null) return;
         ltm.forget(p.getUniqueId()).whenComplete((n, e) -> deliver(ctx, p, () -> List.of(e != null
@@ -230,6 +254,14 @@ public final class MainCommand {
     }
 
     private void forgetPlayer(Context ctx, CommandSender sender, String name) {
+        int known = ctx.bot.forgetRelationshipsByName(name);
+        Player online = Bukkit.getPlayerExact(name);
+        if (online != null && ctx.bot.forgetRelationship(online.getUniqueId())) known = Math.max(known, 1);
+        if (ctx.bot.longMemory() == null && ctx.bot.relationshipsEnabled()) {
+            sender.sendMessage(ctx.messages().get(known > 0 ? "memory.forgot-relationship-player" : "memory.player-unknown",
+                    Messages.text("player", name)));
+            return;
+        }
         LongTermMemory ltm = memoryOrExplain(ctx, sender);
         if (ltm == null) return;
         resolve(ctx, ltm, sender, name, ids -> ltm.forgetMany(ids).whenComplete((n, e) -> deliver(ctx, sender,
@@ -238,6 +270,11 @@ public final class MainCommand {
     }
 
     private void forgetAll(Context ctx, CommandSender sender) {
+        int known = ctx.bot.forgetAllRelationships();
+        if (ctx.bot.longMemory() == null && ctx.bot.relationshipsEnabled()) {
+            sender.sendMessage(ctx.messages().get("memory.forgot-relationship-all", Messages.text("count", Integer.toString(known))));
+            return;
+        }
         LongTermMemory ltm = memoryOrExplain(ctx, sender);
         if (ltm == null) return;
         ltm.forgetAll().whenComplete((n, e) -> deliver(ctx, sender, () -> List.of(e != null
@@ -304,6 +341,28 @@ public final class MainCommand {
     private Component failed(Context ctx, Throwable e) {
         ctx.log.warning("Long-term memory command failed: " + e);
         return ctx.messages().get("memory.failed");
+    }
+
+    // ---- nickname (relationships) ----
+
+    private void nicknameInfo(Context ctx, Player p) {
+        Messages m = ctx.messages();
+        if (!ctx.bot.relationshipsEnabled() || !ctx.settings().features().awareness().relationships().nicknames()) {
+            p.sendMessage(m.get("command.nickname.disabled"));
+            return;
+        }
+        var view = ctx.bot.relationshipOf(p.getUniqueId());
+        p.sendMessage(m.get("command.nickname.info",
+                Messages.comp("level", m.get("command.nickname.level." + view.level().name().toLowerCase(Locale.ROOT))),
+                Messages.text("days", Long.toString(view.knownDays())),
+                Messages.text("nickname", view.nickname() == null ? "-" : view.nickname())));
+    }
+
+    private void nickname(Context ctx, Player p, String raw) {
+        ChatBot.NicknameResult r = ctx.bot.setNickname(p.getUniqueId(), p.getName(), raw);
+        String key = "command.nickname." + r.name().toLowerCase(Locale.ROOT);
+        String nick = ctx.bot.relationshipOf(p.getUniqueId()).nickname();
+        p.sendMessage(ctx.messages().get(key, Messages.text("nickname", nick == null ? "-" : nick)));
     }
 
     private void mute(Context ctx, Player p, boolean mute) {

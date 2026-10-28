@@ -30,16 +30,22 @@ import me.skerik.aifriend.ai.provider.AiProvider;
 import me.skerik.aifriend.ai.provider.ChatMessage;
 import me.skerik.aifriend.ai.provider.ProviderRequest;
 import me.skerik.aifriend.ai.provider.ProviderResult;
+import me.skerik.aifriend.chat.BoredomDetector;
+import me.skerik.aifriend.chat.ChatSupervisor;
 import me.skerik.aifriend.chat.ConversationMemory;
 import me.skerik.aifriend.chat.CostTracker;
 import me.skerik.aifriend.chat.EventPrompts;
 import me.skerik.aifriend.chat.MentionDetector;
 import me.skerik.aifriend.chat.OptOutStore;
+import me.skerik.aifriend.chat.Mood;
 import me.skerik.aifriend.chat.Persona;
 import me.skerik.aifriend.chat.PersonaSelector;
 import me.skerik.aifriend.chat.RateLimiter;
 import me.skerik.aifriend.chat.ReplyFilter;
+import me.skerik.aifriend.chat.Relationships;
+import me.skerik.aifriend.chat.ServerContext;
 import me.skerik.aifriend.chat.SimulationResult;
+import me.skerik.aifriend.config.Awareness;
 import me.skerik.aifriend.config.ChatFeatures;
 import me.skerik.aifriend.config.Settings;
 import me.skerik.aifriend.longmemory.LongTermMemory;
@@ -81,6 +87,8 @@ public final class ChatBot {
 
     public enum MuteResult { DISABLED, DONE, ALREADY }
 
+    public enum NicknameResult { DISABLED, MUTED, INVALID, REJECTED, SET, CLEARED }
+
     /** What caused an answer. */
     public enum Source { TIMED, DIRECT }
 
@@ -101,11 +109,13 @@ public final class ChatBot {
     static final int EXTRACT_MAX_TOKENS = 300;
     static final int MAX_PENDING_LINES = 60;
     static final int MAX_KNOWN_NAMES = 5000;
+    static final int MAX_RELATIONS = 5;
 
     /** Everything built from one {@link Settings} snapshot; reused across reloads where the config did not change. */
     private record Runtime(Settings settings, Optional<AiProvider> provider, PersonaSelector personas,
                            ConversationMemory memory, RateLimiter limiter, CostTracker cost, ReplyFilter filter,
-                           MentionDetector mentions, EventPrompts events) {
+                           MentionDetector mentions, EventPrompts events, Mood mood, BoredomDetector boredom,
+                           ChatSupervisor supervisor) {
     }
 
     /** A request ready to send. */
@@ -137,6 +147,8 @@ public final class ChatBot {
     private final AtomicInteger answeredExchanges = new AtomicInteger();
     private final AtomicBoolean extracting = new AtomicBoolean();
     private volatile @Nullable LongTermMemory longMemory;
+    private final Relationships relationships = new Relationships();
+    private volatile Supplier<ServerContext.Snapshot> contextSource = ServerContext.Snapshot::empty;
 
     private volatile Runtime rt;
     private volatile @Nullable Runnable cancelTimer;
@@ -171,8 +183,14 @@ public final class ChatBot {
         RateLimiter limiter = same && old.settings.features().limits().equals(f.limits()) ? old.limiter : new RateLimiter(f.limits(), zone);
         CostTracker cost = same && old.settings.features().cost().equals(f.cost()) ? old.cost : new CostTracker(f.cost(), zone);
         EventPrompts events = same && old.settings.features().events().equals(f.events()) ? old.events : new EventPrompts(f.events());
+        Awareness a = f.awareness();
+        Mood mood = same && old.settings.features().awareness().mood().equals(a.mood()) ? old.mood : new Mood(a.mood());
+        BoredomDetector boredom = same && old.settings.features().awareness().boredom().equals(a.boredom()) ? old.boredom
+                : new BoredomDetector(a.boredom(), zone);
+        ChatSupervisor supervisor = same && old.settings.features().awareness().supervision().equals(a.supervision())
+                ? old.supervisor : new ChatSupervisor(a.supervision());
         return new Runtime(s, providerFactory.apply(s), new PersonaSelector(f.personas()), memory, limiter, cost,
-                new ReplyFilter(fc), new MentionDetector(s.chatbotName(), f.mentions()), events);
+                new ReplyFilter(fc), new MentionDetector(s.chatbotName(), f.mentions()), events, mood, boredom, supervisor);
     }
 
     // ---- lifecycle ----
@@ -220,9 +238,24 @@ public final class ChatBot {
         return longMemory;
     }
 
-    /** Saves the opt-out list; call on disable. */
+    /** Where the world picture (time, weather, player surroundings) comes from; read on async threads, must not block. */
+    public void setContextSource(Supplier<ServerContext.Snapshot> source) {
+        this.contextSource = source;
+    }
+
+    /** The relationship records (in memory; the plugin attaches a database to them). */
+    public Relationships relationships() {
+        return relationships;
+    }
+
+    /** Saves the opt-out list and the relationships; call on disable (before the database is closed). */
     public void flush() {
         optOut.flush();
+        try {
+            relationships.flush();
+        } catch (java.sql.SQLException | RuntimeException e) {
+            log.warning("Relationships: could not save to the database (" + e.getClass().getSimpleName() + ")");
+        }
     }
 
     // ---- intake ----
@@ -234,10 +267,23 @@ public final class ChatBot {
      * @param bypassLimits the player ignores the rate limits (aifriend.bypass-limits)
      */
     public void onChat(UUID player, String name, String text, boolean mayAsk, boolean bypassLimits) {
+        onChat(player, name, text, mayAsk, bypassLimits, false);
+    }
+
+    /** As above; {@code exemptFromSupervision} (aifriend.bypass-supervision) skips the friendly spam/caps/language notes. */
+    public void onChat(UUID player, String name, String text, boolean mayAsk, boolean bypassLimits,
+                       boolean exemptFromSupervision) {
         Runtime r = rt;
         if (knownNames.size() > MAX_KNOWN_NAMES) knownNames.clear();
         knownNames.put(name.toLowerCase(Locale.ROOT), player);
+        long now = clock.getAsLong();
+        // somebody is talking, muted or not: the chat is not quiet
+        r.boredom.playerChatted(now);
         if (r.settings.features().optOut().enabled() && optOut.isMuted(player)) return;
+        if (!exemptFromSupervision && r.supervisor.enabled()) {
+            r.supervisor.inspect(player, text, now).ifPresent(issue ->
+                    notifier.tell(player, "supervision." + issue.name().toLowerCase(Locale.ROOT), Map.of()));
+        }
         ChatLine line = ChatLine.of(name, text);
         boolean buffered = false;
         if (line != null && listening(r)) {
@@ -260,6 +306,7 @@ public final class ChatBot {
     /** A game event (death, advancement, ...). May cause an early answer. */
     public void onEvent(EventPrompts.GameEvent event) {
         Runtime r = rt;
+        r.mood.record(event, clock.getAsLong());
         if (!listening(r)) return;
         r.events.accept(event, Instant.ofEpochMilli(clock.getAsLong())).ifPresent(line -> {
             eventLines.add(line);
@@ -287,18 +334,31 @@ public final class ChatBot {
         Runtime r = rt;
         Settings s = r.settings;
         long now = clock.getAsLong();
+        int online = onlinePlayers.getAsInt();
+        // an empty server is not "bored": the quiet time starts when the first player arrives
+        if (online == 0) r.boredom.touch(now);
         if (!s.enabled() || r.provider.isEmpty() || now < sleepUntil || now < retryAt) return;
-        if (onlinePlayers.getAsInt() == 0) return;
+        if (online == 0) return;
         List<ChatLine> batch = buffer.snapshot();
         List<String> events = new ArrayList<>(eventLines);
-        if (batch.isEmpty() && events.isEmpty()) return;
+        BoredomDetector.Kind idle = null;
+        if (batch.isEmpty() && events.isEmpty()) {
+            // nothing to answer: maybe the chat is just quiet (only with at least min-players online)
+            idle = r.boredom.ready(now, online, ThreadLocalRandom.current()).orElse(null);
+            if (idle == null) return;
+        }
         Instant at = Instant.ofEpochMilli(now);
         if (!r.limiter.tryAcquire(null, at).allowed()) {
             log.fine("Server-wide AI limit reached; waiting");
             return;
         }
+        String idleHint = null;
+        if (idle != null) {
+            idleHint = BoredomDetector.prompt(idle, r.boredom.quietMinutes(now), online);
+            r.boredom.commit(now);
+        }
 
-        Prepared p = prepare(r, batch, events, true);
+        Prepared p = prepare(r, batch, events, true, idleHint);
         Answer answer;
         try {
             answer = call(r, p, null, at);
@@ -374,7 +434,7 @@ public final class ChatBot {
                 notifier.tell(player, "command.ask.empty", Map.of());
                 return;
             }
-            Prepared p = prepare(r, lines, List.of(), true);
+            Prepared p = prepare(r, lines, List.of(), true, null);
             Answer answer;
             try {
                 answer = call(r, p, player, at);
@@ -418,7 +478,7 @@ public final class ChatBot {
         Instant at = Instant.ofEpochMilli(now);
         List<ChatLine> batch = buffer.snapshot();
         List<String> events = new ArrayList<>(eventLines);
-        Prepared p = prepare(r, batch, events, false);
+        Prepared p = prepare(r, batch, events, false, null);
         List<SimulationResult.Blocker> blockers = new ArrayList<>();
         if (!r.settings.enabled()) blockers.add(SimulationResult.Blocker.DISABLED);
         if (r.provider.isEmpty()) blockers.add(SimulationResult.Blocker.NO_KEY);
@@ -449,11 +509,13 @@ public final class ChatBot {
 
     // ---- request / response ----
 
-    private Prepared prepare(Runtime r, List<ChatLine> lines, List<String> events, boolean countUse) {
+    private Prepared prepare(Runtime r, List<ChatLine> lines, List<String> events, boolean countUse, @Nullable String idleHint) {
         WorldView w = world.get();
+        long now = clock.getAsLong();
         Persona persona = r.personas.select(w.world(), w.timeTicks(), ThreadLocalRandom.current()).orElse(null);
         List<ChatMessage> messages = new ArrayList<>();
-        messages.add(new ChatMessage(ChatMessage.Role.SYSTEM, PromptBuilder.system(r.settings, persona)));
+        Mood.Level mood = r.mood.enabled() ? r.mood.level(now) : null;
+        messages.add(new ChatMessage(ChatMessage.Role.SYSTEM, PromptBuilder.system(r.settings, persona, mood, idleHint)));
         int history = 0;
         if (r.memory.isActive()) {
             for (ConversationMemory.Turn t : r.memory.history()) {
@@ -464,9 +526,11 @@ public final class ChatBot {
         }
         String previous = r.memory.isActive() ? "" : lastReply;
         List<PromptBuilder.MemoryNote> notes = recall(lines, countUse);
-        String user = PromptBuilder.user(lines, events, notes, previous);
+        PromptBuilder.Data data = new PromptBuilder.Data(lines, events, notes, relationsFor(r, lines, now), contextFor(r, lines));
+        String user = PromptBuilder.user(data, previous);
         // the conversation history keeps the chat only: remembered notes are fetched fresh for every request
-        String plain = notes.isEmpty() ? user : PromptBuilder.user(lines, events, previous);
+        boolean extras = !notes.isEmpty() || !data.relations().isEmpty() || !data.context().isEmpty();
+        String plain = extras ? PromptBuilder.user(lines, events, previous) : user;
         messages.add(new ChatMessage(ChatMessage.Role.USER, user));
         return new Prepared(messages, user, plain, persona, history);
     }
@@ -490,10 +554,39 @@ public final class ChatBot {
         return out;
     }
 
+    /** How well the bot knows the players of this batch (only those it knows at least a little), as untrusted data lines. */
+    private List<PromptBuilder.Relation> relationsFor(Runtime r, List<ChatLine> lines, long now) {
+        Relationships.Config rc = r.settings.features().awareness().relationships();
+        if (!rc.enabled()) return List.of();
+        Map<UUID, String> who = new LinkedHashMap<>();
+        for (ChatLine line : lines) {
+            UUID id = knownNames.get(line.player().toLowerCase(Locale.ROOT));
+            if (id != null && !isMuted(id)) who.putIfAbsent(id, line.player());
+        }
+        List<PromptBuilder.Relation> out = new ArrayList<>();
+        for (Map.Entry<UUID, String> e : who.entrySet()) {
+            Relationships.View v = relationships.view(e.getKey(), now, rc);
+            String nick = rc.nicknames() ? v.nickname() : null;
+            if (v.level() == Relationships.Level.STRANGER && nick == null) continue;
+            out.add(new PromptBuilder.Relation(e.getValue(), v.level(), v.knownDays(), nick));
+            if (out.size() >= MAX_RELATIONS) break;
+        }
+        return out;
+    }
+
+    /** The world picture for this request: the general facts plus the surroundings of the players who wrote. */
+    private ServerContext.Snapshot contextFor(Runtime r, List<ChatLine> lines) {
+        if (!r.settings.features().awareness().context().enabled()) return ServerContext.Snapshot.empty();
+        List<String> names = lines.stream().map(ChatLine::player).distinct().toList();
+        return contextSource.get().forPlayers(names, MAX_RELATIONS);
+    }
+
     // ---- long-term memory: collecting notes ----
 
     /** Called after an answer was posted: counts the exchange and, every N-th time, extracts notes in the background. */
     private void afterAnswer(List<ChatLine> lines) {
+        if (lines.isEmpty()) return;
+        countRelationships(lines);
         LongTermMemory ltm = longMemory;
         if (ltm == null || !ltm.config().enabled()) return;
         for (ChatLine line : lines) {
@@ -503,6 +596,17 @@ public final class ChatBot {
         while (pendingNotes.size() > MAX_PENDING_LINES) pendingNotes.poll();
         if (answeredExchanges.incrementAndGet() % ltm.config().extractEveryExchanges() == 0) {
             scheduler.runAsync(() -> extractNotes(ltm));
+        }
+    }
+
+    /** Every player who took part in an answered exchange gets to know the bot a little better. */
+    private void countRelationships(List<ChatLine> lines) {
+        if (!rt.settings.features().awareness().relationships().enabled()) return;
+        long now = clock.getAsLong();
+        Set<UUID> counted = new HashSet<>();
+        for (ChatLine line : lines) {
+            UUID id = knownNames.get(line.player().toLowerCase(Locale.ROOT));
+            if (id != null && !isMuted(id) && counted.add(id)) relationships.interaction(id, line.player(), now);
         }
     }
 
@@ -595,6 +699,7 @@ public final class ChatBot {
         if (result.isEmpty()) return result;
         String text = result.get();
         lastReply = text;
+        r.boredom.touch(clock.getAsLong());
         // the history shows the model its own answers in the format it must keep using (plain text here makes JSON mode drift)
         if (r.memory.isActive()) r.memory.add(p.memoryText, Reply.asJson(text));
         broadcaster.say(name, text);
@@ -668,6 +773,8 @@ public final class ChatBot {
         if (!optOut.setMuted(player, true)) return MuteResult.ALREADY;
         buffer.removeFrom(name);
         pendingNotes.removeIf(l -> l.player().equalsIgnoreCase(name));
+        // a player who muted the bot is no longer known to it
+        relationships.forget(player);
         LongTermMemory ltm = longMemory;
         if (ltm != null && ltm.config().deleteOnMute()) {
             ltm.forget(player).exceptionally(e -> {
@@ -684,6 +791,81 @@ public final class ChatBot {
         if (!optOut.setMuted(player, false)) return MuteResult.ALREADY;
         scheduler.runAsync(optOut::flush);
         return MuteResult.DONE;
+    }
+
+    // ---- relationships (nickname, forgetting) ----
+
+    public boolean relationshipsEnabled() {
+        return rt.settings.features().awareness().relationships().enabled();
+    }
+
+    /** Sets or, with a blank text, clears the nickname the bot may use for this player. */
+    public NicknameResult setNickname(UUID player, String name, String raw) {
+        Relationships.Config rc = rt.settings.features().awareness().relationships();
+        if (!rc.enabled() || !rc.nicknames()) return NicknameResult.DISABLED;
+        if (isMuted(player)) return NicknameResult.MUTED;
+        long now = clock.getAsLong();
+        if (raw.isBlank()) {
+            relationships.setNickname(player, name, null, now);
+            return NicknameResult.CLEARED;
+        }
+        String nick = Relationships.sanitizeNickname(raw);
+        if (nick == null) return NicknameResult.INVALID;
+        // the bot may repeat it in public chat, so it has to pass the same filter as the bot's own answers
+        if (!rt.filter.apply(nick).filter(nick::equals).isPresent()) return NicknameResult.REJECTED;
+        relationships.setNickname(player, name, nick, now);
+        return NicknameResult.SET;
+    }
+
+    /** Forgets what the bot knows about the player. False (and nothing happens) when relationships are switched off. */
+    public boolean forgetRelationship(UUID player) {
+        if (!relationshipsEnabled()) return false;
+        relationships.forget(player);
+        flushRelationships();
+        return true;
+    }
+
+    /** Forgets the players with this name; returns how many were known. */
+    public int forgetRelationshipsByName(String name) {
+        if (!relationshipsEnabled()) return 0;
+        List<UUID> ids = relationships.findByName(name);
+        ids.forEach(relationships::forget);
+        if (!ids.isEmpty()) flushRelationships();
+        return ids.size();
+    }
+
+    /** Forgets everybody; returns how many were known (0 when relationships are off). */
+    public int forgetAllRelationships() {
+        if (!relationshipsEnabled()) return 0;
+        int n = relationships.forgetAll();
+        flushRelationships();
+        return n;
+    }
+
+    /** What the bot knows about this player (for /aifriend nickname and %aifriend_relationship%). */
+    public Relationships.View relationshipOf(UUID player) {
+        return relationships.view(player, clock.getAsLong(), rt.settings.features().awareness().relationships());
+    }
+
+    /** The mood of the bot, or empty when the mood feature is off. */
+    public Optional<Mood.Level> mood() {
+        Runtime r = rt;
+        return r.mood.enabled() ? Optional.of(r.mood.level(clock.getAsLong())) : Optional.empty();
+    }
+
+    public int moodScore() {
+        return rt.mood.score(clock.getAsLong());
+    }
+
+    /** Writes pending relationship changes to the database in the background. */
+    public void flushRelationships() {
+        scheduler.runAsync(() -> {
+            try {
+                relationships.flush();
+            } catch (java.sql.SQLException | RuntimeException e) {
+                log.warning("Relationships: could not save to the database (" + e.getClass().getSimpleName() + ")");
+            }
+        });
     }
 
     // ---- read-only views ----
