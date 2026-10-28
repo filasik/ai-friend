@@ -22,8 +22,8 @@ body:
   - type: dropdown
     id: key-type
     attributes:
-      label: Which API key do you use?
-      options: ["trial", "own OpenAI key", "not set"]
+      label: Which provider do you use?
+      options: ["openai", "anthropic", "ollama", "custom", "none set"]
   - type: textarea
     id: status
     attributes:

@@ -53,7 +53,8 @@ class ProviderSettingsTest {
     @Test
     void missingSectionGivesDefaults() {
         ProviderSettings s = ProviderSettings.load(null, log);
-        assertEquals("proxy", s.primary());
+        assertEquals("openai", s.primary());
+        assertFalse(s.retiredProxy());
         assertTrue(s.failover().isEmpty());
         assertFalse(s.cacheEnabled());
         assertEquals(200, s.cacheMaxEntries());
@@ -66,10 +67,10 @@ class ProviderSettingsTest {
         assertTrue(warnings.isEmpty());
     }
 
-    /** The five built-in names. */
+    /** The four built-in names. */
     private static final class Set5 {
         static java.util.Set<String> names() {
-            return java.util.Set.of("proxy", "openai", "anthropic", "ollama", "custom");
+            return java.util.Set.of("openai", "anthropic", "ollama", "custom");
         }
     }
 
@@ -104,7 +105,7 @@ class ProviderSettingsTest {
         ProviderSettings s = load("""
                 provider:
                   primary: nonsense
-                  failover: [openai, openai, ghost, nonsense]
+                  failover: [ollama, ollama, ghost, nonsense]
                   failover-cooldown-seconds: 1
                   cache: {enabled: true, max-entries: 0, ttl-minutes: 99999}
                   providers:
@@ -112,8 +113,8 @@ class ProviderSettingsTest {
                     bad: {type: wat}
                     notype: {model: x}
                 """);
-        assertEquals("proxy", s.primary());
-        assertEquals(List.of("openai"), s.failover());
+        assertEquals("openai", s.primary());
+        assertEquals(List.of("ollama"), s.failover());
         assertEquals(60, s.failoverCooldownSeconds());
         assertEquals(200, s.cacheMaxEntries());
         assertEquals(10, s.cacheTtlMinutes());
@@ -128,12 +129,39 @@ class ProviderSettingsTest {
     // --- factory ---
 
     @Test
-    void defaultsBuildTheProxyOnly() {
+    void withoutAKeyNothingIsBuilt() {
         ProviderSettings s = ProviderSettings.load(null, log);
-        var p = ProviderFactory.create(s, "mykey", "gpt-4o-mini", OPTS, Clock.systemUTC(), log);
-        assertInstanceOf(ProxyProvider.class, p.orElseThrow());
-        assertTrue(ProviderFactory.create(s, "", "m", OPTS, Clock.systemUTC(), log).isEmpty());
-        assertTrue(ProviderFactory.create(s, "your_openai_api_key_here", "m", OPTS, Clock.systemUTC(), log).isEmpty());
+        assertEquals("openai", s.primary());
+        assertTrue(ProviderFactory.create(s, OPTS, Clock.systemUTC(), log).isEmpty());
+    }
+
+    @Test
+    void retiredProxyAsPrimaryKeepsTheBotInactiveEvenWithOtherKeys() throws Exception {
+        ProviderSettings s = load("""
+                provider:
+                  primary: proxy
+                  failover: [openai]
+                  providers:
+                    openai: {api-key: "sk-real"}
+                """);
+        assertTrue(s.retiredProxy());
+        assertEquals("openai", s.primary(), "falls back to the default name, but is never used");
+        assertTrue(ProviderFactory.create(s, OPTS, Clock.systemUTC(), log).isEmpty(), "no silent switch to another provider");
+    }
+
+    @Test
+    void retiredProxyInFailoverIsSkippedWithAWarning() throws Exception {
+        ProviderSettings s = load("""
+                provider:
+                  primary: openai
+                  failover: [proxy, ollama]
+                  providers:
+                    openai: {api-key: "sk-real"}
+                """);
+        assertFalse(s.retiredProxy());
+        assertEquals(List.of("ollama"), s.failover());
+        assertTrue(warnings.stream().anyMatch(w -> w.contains("no longer exists")), warnings.toString());
+        assertTrue(ProviderFactory.create(s, OPTS, Clock.systemUTC(), log).isPresent());
     }
 
     @Test
@@ -147,7 +175,7 @@ class ProviderSettingsTest {
                     openai: {api-key: "ok"}
                 """);
         // anthropic (no key) and custom (no base-url) are skipped with warnings
-        AiProvider p = ProviderFactory.create(s, "", "m", OPTS, Clock.systemUTC(), log).orElseThrow();
+        AiProvider p = ProviderFactory.create(s, OPTS, Clock.systemUTC(), log).orElseThrow();
         assertInstanceOf(CachingProvider.class, p);
         assertEquals("openai", p.id());
         assertEquals(2, warnings.size(), warnings.toString());
@@ -161,7 +189,7 @@ class ProviderSettingsTest {
                   primary: openai
                   failover: [ollama]
                 """);
-        AiProvider p = ProviderFactory.create(s, "", "m", OPTS, Clock.systemUTC(), log).orElseThrow();
+        AiProvider p = ProviderFactory.create(s, OPTS, Clock.systemUTC(), log).orElseThrow();
         assertInstanceOf(OllamaProvider.class, p);
         assertTrue(warnings.getFirst().contains("openai"));
     }

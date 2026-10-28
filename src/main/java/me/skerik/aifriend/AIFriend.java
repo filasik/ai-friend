@@ -192,9 +192,7 @@ public final class AIFriend extends JavaPlugin implements Listener {
         String version = getPluginMeta().getVersion();
         Path mutedFile = getDataFolder().toPath().resolve(settings.features().optOut().file());
         ChatBot bot = new ChatBot(getLogger(), scheduler,
-                s -> ProviderFactory.create(s.provider(), s.hasApiKey() ? s.apiKey() : "", s.model(),
-                        httpOptions(s),
-                        Clock.systemUTC(), getLogger()),
+                s -> ProviderFactory.create(s.provider(), httpOptions(s), Clock.systemUTC(), getLogger()),
                 (name, text) -> scheduler.runGlobal(() -> Bukkit.getServer().sendMessage(messages.get("chat.format",
                         Messages.text("bot", name), Messages.text("text", text)))),
                 new ChatBot.Notifier() {
@@ -292,7 +290,11 @@ public final class AIFriend extends JavaPlugin implements Listener {
 
         ChatBot.Status status = bot.status();
         if (status.state() == ChatBot.State.NO_KEY) {
-            getLogger().warning("No usable AI provider: set api-key in plugins/ai-friend/config.yml (\"trial\" gives a free 3-day trial) or configure provider.primary. The bot stays silent until then.");
+            if (settings.provider().retiredProxy()) {
+                getLogger().warning("config.yml still uses the removed provider \"proxy\" (or the old trial key): AI Friend 3.0 only talks to openai, anthropic, ollama or custom. The bot stays inactive and sends nothing until you set provider.primary and that provider's api-key.");
+            } else {
+                getLogger().warning("No usable AI provider: set provider.primary and its api-key in plugins/ai-friend/config.yml. The bot stays silent until then and sends nothing.");
+            }
         }
         Map<String, String> details = new LinkedHashMap<>();
         details.put("Bot", !settings.enabled() ? "disabled in config.yml"

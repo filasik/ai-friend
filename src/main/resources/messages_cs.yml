@@ -25,7 +25,7 @@ command:
   state:
     running: '<green>běží'
     disabled: '<red>vypnutý (enabled: false v config.yml)'
-    no-key: '<red>nečinný, api-key není nastaven v config.yml'
+    no-key: '<red>nečinný, žádný api-key poskytovatele v config.yml'
     sleeping: '<yellow>spí, probudí se za <minutes> min (hráči neměli zájem)'
     backoff: '<yellow>čeká <seconds> s před dalším pokusem (poslední požadavek selhal)'
 

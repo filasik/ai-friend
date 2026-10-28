@@ -2,13 +2,15 @@
 
 A friendly AI companion for your Minecraft chat. It reads the public chat and posts short replies as a bot with your own name, language and personality, using OpenAI, Claude, a local Ollama model or any OpenAI-compatible server.
 
+> **Privacy:** chat lines, including player names, go only to the AI provider you choose yourself (OpenAI, Anthropic, your own Ollama or another OpenAI-compatible server). Nothing goes through the plugin author. Details in the Privacy / data section below.
+
 ![banner](https://raw.githubusercontent.com/filasik/ai-friend/main/docs/assets/banner.png)
 
-> **Paper only.** Version 2.x requires Paper 26.3+ and Java 25. Spigot and Bukkit are no longer supported; the 1.x jar stays available on [GitHub](https://github.com/filasik/ai-friend/releases).
+> **Paper only.** Version 3.x requires Paper 26.3+ and Java 25. Spigot and Bukkit are no longer supported; the 1.x jar stays available on [GitHub](https://github.com/filasik/ai-friend/releases).
 
 ## Features
 - One short reply per interval (`interval-seconds`, default 60) as `<chatbot-name>: <reply>`, plus direct questions with `/ai <question>` or `@AI Friend ...`
-- Choose your AI: OpenAI, Anthropic Claude, local Ollama, any OpenAI-compatible endpoint (OpenRouter, LM Studio, ...) or the original proxy (still the default); failover chain and optional answer cache
+- Choose your AI: OpenAI, Anthropic Claude, local Ollama, any OpenAI-compatible endpoint (OpenRouter, LM Studio, ...) (OpenAI is the default); failover chain and optional answer cache
 - Optional chat features, all off by default: personas (by world and time of day), conversation memory, rate and daily limits, cost estimate, reply filter, reactions to deaths, advancements, first joins, boss kills and explosions
 - Players can switch the bot off for themselves with `/aifriend mute`
 - Optional long-term memory (off by default): the bot remembers facts players told about themselves, in SQLite or MariaDB; players list and delete their notes with `/aifriend memory` and `/aifriend forget`
@@ -17,7 +19,6 @@ A friendly AI companion for your Minecraft chat. It reads the public chat and po
 - Admin tools: `/aifriend sleep`, `wake`, `simulate` (dry run, nothing is posted), `cost`, `status`
 - Configurable bot name, reply language and a free-text `personalization`
 - Goes to sleep when players seem annoyed; one player alone cannot silence it
-- Free 3-day trial with the key `trial` (proxy), or your own key
 - Never blocks the server: async requests with timeouts, backoff on failures, bounded queue
 - Player chat is sent as clearly delimited data, never as instructions
 - Commented `config.yml` that gains new options on update without touching your values; English and Czech messages
@@ -25,7 +26,7 @@ A friendly AI companion for your Minecraft chat. It reads the public chat and po
 
 ## Quick start
 1. Put the jar in `plugins/` and start the server.
-2. Set `api-key: "trial"` in `plugins/ai-friend/config.yml`, or choose a provider under `provider:` (OpenAI, Claude, Ollama, custom).
+2. In `plugins/ai-friend/config.yml` choose `provider.primary` (OpenAI, Claude, Ollama, custom) and put that provider's `api-key` under `provider.providers.<name>`. Without a key the bot stays silent and sends nothing.
 3. `/aifriend reload`, then `/aifriend status`.
 
 ## Commands & Permissions
@@ -47,15 +48,14 @@ A friendly AI companion for your Minecraft chat. It reads the public chat and po
 `aifriend.bypass-limits` (op) exempts a player from the cooldown and daily limits, `aifriend.bypass-supervision` (op) from the friendly chat hints.
 
 ## Configuration
-Key options in `config.yml` (all commented): `provider.*` (primary, failover, cache and per-provider settings), `personas`, `memory`, `limits`, `cost`, `reply-filter`, `mentions`, `opt-out`, `events`, `storage` (SQLite or MariaDB), `long-term-memory`, `server-context`, `mood`, `relationships`, `boredom`, `supervision`, `enabled`, `api-key`, `model` (default `gpt-4o-mini`), `chatbot-name`, `language`, `personalization`, `interval-seconds` (5-3600), `stop-when-ignored`, `sleep-minutes`, `max-queued-messages`, `max-reply-length`, `http.*` timeouts, `locale` (`en`/`cs`), `update-check`, `metrics`. Full reference in the [README](https://github.com/filasik/ai-friend#configuration).
+Key options in `config.yml` (all commented): `provider.*` (primary, failover, cache and per-provider settings), `personas`, `memory`, `limits`, `cost`, `reply-filter`, `mentions`, `opt-out`, `events`, `storage` (SQLite or MariaDB), `long-term-memory`, `server-context`, `mood`, `relationships`, `boredom`, `supervision`, `enabled`, `chatbot-name`, `language`, `personalization`, `interval-seconds` (5-3600), `stop-when-ignored`, `sleep-minutes`, `max-queued-messages`, `max-reply-length`, `http.*` timeouts, `locale` (`en`/`cs`), `update-check`, `metrics`. Full reference in the [README](https://github.com/filasik/ai-friend#configuration).
 
 ## Privacy / data
 
 **Only public chat is read.** Private messages (`/msg`, `/tell`, `/r`), other commands, cancelled messages and messages that a chat plugin delivers to only a part of the players (staff, party or local channels) are never collected or sent anywhere. The one exception is a question the player asks the bot on purpose with `/ai`. The plugin does not write chat lines to its own log.
 What leaves your server depends on `provider.primary` (and the failover list). A request contains recent chat lines **including player names**, the prompt, optional conversation memory and event descriptions.
 
-- **proxy** (default): sent to `gpt.netuj.eu`, **operated by the plugin author**, together with your API key, the model name and your server's address, and forwarded to OpenAI.
-- **openai / anthropic**: sent directly to `api.openai.com` / `api.anthropic.com` with your key, no proxy involved.
+- **openai / anthropic**: sent directly to `api.openai.com` / `api.anthropic.com` with your key. Nobody in between.
 - **ollama**: sent only to your Ollama server (local by default); nothing leaves the machine.
 - **custom**: sent to the endpoint you configure (OpenRouter, your own server, ...).
 
@@ -63,7 +63,7 @@ What leaves your server depends on `provider.primary` (and the failover list). A
 
 **World awareness** (off by default): *server context* adds the time, weather, players online and, for the players who wrote, their world, biome and nearby hostile mobs (no coordinates) to every request; *relationships* store the player UUID, last name, a counter, first/last time and an optional nickname in your database (deleted by `/aifriend forget` and by muting the bot); *chat supervision* only looks at public lines in memory, makes no request and stores nothing.
 
-Chat of your players is therefore sent to a third party unless you use a local model; mention it in your server rules or privacy policy. API keys stay in `config.yml` and are masked in output. Nothing is sent while no provider is usable or the bot is disabled; muted players are never stored or sent. The only other network calls are anonymous bStats statistics (`metrics: false` turns them off) and the GitHub update check (`update-check: false`).
+Chat of your players is therefore sent to the provider you chose (never to the plugin author) unless you use a local model; mention it in your server rules or privacy policy. API keys stay in `config.yml` and are masked in output. Nothing is sent while no provider is usable or the bot is disabled; muted players are never stored or sent. The only other network calls are anonymous bStats statistics (`metrics: false` turns them off) and the GitHub update check (`update-check: false`).
 
 ## Integrations
 - **API for plugins:** `AiFriendResponseEvent` (asynchronous, cancellable, `setText`) fires right before the bot posts; `AiFriendApi` is available from the Bukkit `ServicesManager`.

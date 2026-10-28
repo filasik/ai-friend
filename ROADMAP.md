@@ -23,7 +23,7 @@ Cíl: plugin nepadá, nezamrzá a neuniká z něj nic citlivého.
 
 ### 1.3 JSON a prompt injection
 - ✅ Skládat i parsovat JSON knihovnou (Gson) místo string templates a regexu na `\uXXXX`.
-- ✅ Oddělit systémové instrukce od hráčského textu (proxy přijímá jediný `message`, takže: hráčské řádky jsou escapované JSON v ohraničeném bloku označeném jako nedůvěryhodná data; samostatné role přijdou s přímým voláním OpenAI ve Fázi 4).
+- ✅ Oddělit systémové instrukce od hráčského textu (hráčské řádky jsou escapované JSON v ohraničeném bloku označeném jako nedůvěryhodná data; samostatné role mají přímé providery od 2.1.0).
 - ✅ Nespoléhat na `contains("STOP MESSAGING")` – strukturovaná odpověď (např. JSON pole `action`).
 - ✅ Ochrana proti tomu, aby jeden hráč napsáním magické fráze vypnul bota všem.
 
@@ -47,7 +47,7 @@ Cíl: plugin nepadá, nezamrzá a neuniká z něj nic citlivého.
 - ✅ Porovnávat verze sémanticky, ne jako řetězce.
 
 ### 1.7 Důvěrnost
-- ✅ Zdokumentovat v README, že požadavky jdou přes `gpt.netuj.eu`, a co se tam ukládá.
+- ✅ Zdokumentovat v README, kam požadavky jdou a co se posílá (od 3.0.0 jen vybranému poskytovateli, nic přes autora).
 - ✅ Volitelný přímý režim (OpenAI, Anthropic, Ollama, vlastní endpoint) od 2.1.0; hráčský text je tam v samostatné roli.
 
 ---

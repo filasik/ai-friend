@@ -4,7 +4,7 @@
 - [ ] `./scripts/smoke-test.sh` passes (clean Paper, plugin enabled, no errors in the log)
 - [ ] Tested by hand on Paper (`docs/MANUAL_TEST.md`): chat replies, `/aifriend`, `status`, `reload`, permissions (as OP and without OP), console
 - [ ] Key not set (default placeholder): bot silent, nothing sent, `/aifriend status` says so
-- [ ] Key `trial`: bot replies
+- [ ] Own valid key of one provider (`provider.primary`): bot replies
 - [ ] Invalid key: 401 path ends in one clear log line and backoff, no crash
 - [ ] Network down (e.g. blocked host): backoff 1 -> 2 -> 4 min, messages kept, recovery when the network is back
 - [ ] Upgrade from a 1.x `config.yml`: old keys migrated, values kept, backup written
@@ -14,11 +14,11 @@
 - [ ] New message key => present in `messages_en.yml` and every bundled locale (`MessagesFilesTest`)
 - [ ] First start on a machine with internet works (libraries are downloaded by the loader); the jar contains only bStats as a shaded library
 - [ ] `gradle.properties`: `pluginVersion`, `paperApiVersion`, `apiVersion`, `minecraftVersion` current; `bstatsId` set to the real bStats plugin id (not 0)
-- [ ] The proxy protocol (`https://gpt.netuj.eu/api/ai_friend.php`) still works with this build; Privacy/data text in README and listings still matches what is sent, per provider
+- [ ] Privacy/data text in README and listings still matches what is sent, per provider
 - [ ] 2.1.0: each direct provider verified with a REAL key / running Ollama (OpenAI, Anthropic, Ollama, one `custom` such as OpenRouter); request shapes so far only tested against mock servers. Model id `claude-haiku-5-5` checked against the live Anthropic model list
 - [ ] 2.1.0: failover works (primary key broken -> next provider answers, cooldown visible), cache off by default
 - [ ] 2.1.0: every new feature is OFF in a fresh `config.yml`; enabling each one works and `docs/MANUAL_TEST.md` section "2.1.0" is done
-- [ ] 2.1.0: upgrade from a real 2.0.0 `config.yml`: `config-version: 3`, new sections appended with comments, own values kept, `config.yml.bak-v1` written, behaviour unchanged (proxy still primary)
+- [ ] 2.1.0: upgrade from a real 2.0.0 `config.yml`: `config-version: 3`, new sections appended with comments, own values kept, `config.yml.bak-v1` written, own values kept
 - [ ] 2.1.0: no API key (any provider) appears in the log, `/aifriend status`, `/aifriend simulate` output or error messages; a provider placeholder key (`your_*_here`) counts as unset
 - [ ] 2.1.0: new permissions in `paper-plugin.yml` match the README table (aifriend.mute, ask, sleep, simulate, cost, bypass-limits)
 - [ ] 2.1.0: long-term memory is OFF in a fresh `config.yml` and no database file is created then; with it on, `docs/MANUAL_TEST.md` section "Long-term memory and database" is done, including MariaDB (never tested live so far; only SQLite is covered by the unit tests)

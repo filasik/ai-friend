@@ -43,7 +43,8 @@ class SettingsTest {
         assertTrue(s.metrics());
         assertEquals(List.of(), s.aliases());
         assertTrue(s.enabled());
-        assertEquals("gpt-4o-mini", s.model());
+        assertEquals("openai", s.provider().primary());
+        assertFalse(s.provider().retiredProxy());
         assertEquals("AI Friend", s.chatbotName());
         assertEquals("English", s.language());
         assertEquals("", s.personalization());
@@ -54,7 +55,9 @@ class SettingsTest {
         assertEquals(256, s.maxReplyLength());
         assertEquals(10, s.connectTimeoutSeconds());
         assertEquals(30, s.readTimeoutSeconds());
-        assertFalse(s.hasApiKey());
+        assertEquals("-", s.activeMaskedKey(), "no key shipped");
+        assertFalse(bundled().contains("api-key", true), "no top-level key any more");
+        assertFalse(bundled().contains("model", true), "no top-level model any more");
     }
 
     @Test
@@ -82,10 +85,8 @@ class SettingsTest {
         assertFalse(a.events().enabled(), "events must be off in the shipped config");
         assertEquals(b.events().enabled(), a.events().enabled());
         assertEquals(empty.intervalSeconds(), shipped.intervalSeconds());
-        assertEquals(empty.model(), shipped.model());
         assertEquals(empty.chatbotName(), shipped.chatbotName());
         assertEquals(empty.maxReplyLength(), shipped.maxReplyLength());
-        assertEquals(empty.apiKey(), shipped.apiKey());
     }
 
     @Test
@@ -105,33 +106,50 @@ class SettingsTest {
 
     @Test
     void blankTextOptionsFallBack() throws Exception {
-        assertEquals("gpt-4o-mini", with("model", "   ").model());
         assertEquals("AI Friend", with("chatbot-name", "").chatbotName());
         assertEquals("English", with("language", " ").language());
         assertEquals("Bob", with("chatbot-name", "  Bob ").chatbotName());
     }
 
     @Test
-    void hasApiKey() throws Exception {
-        assertFalse(with("api-key", Settings.KEY_PLACEHOLDER).hasApiKey());
-        assertFalse(with("api-key", "   ").hasApiKey());
-        assertTrue(with("api-key", "sk-real-key-123456").hasApiKey());
-        assertTrue(with("api-key", "trial").hasApiKey());
+    void activeKeyAndModelComeFromTheChosenProvider() throws Exception {
+        assertEquals("gpt-4o-mini", bundled().getString("provider.providers.openai.model"));
+        assertEquals("gpt-4o-mini", with("provider.primary", "openai").activeModel());
+        assertEquals("claude-haiku-5-5", with("provider.primary", "anthropic").activeModel());
+        assertEquals("-", with("provider.primary", "custom").activeModel(), "custom has no default model");
     }
 
     @Test
     void maskedKeyNeverShowsTheSecret() throws Exception {
         String secret = "sk-abcdefghijklmnop1234";
-        String masked = with("api-key", secret).maskedKey();
+        String masked = with("provider.providers.openai.api-key", secret).activeMaskedKey();
         assertEquals("sk-...1234", masked);
         assertFalse(masked.contains("abcdefghijklmnop"));
 
-        assertEquals("-", with("api-key", Settings.KEY_PLACEHOLDER).maskedKey());
-        assertEquals("-", with("api-key", "").maskedKey());
-        assertEquals("trial", with("api-key", "trial").maskedKey());
-        assertEquals("****", with("api-key", "sk-short").maskedKey());
-        assertEquals("****", with("api-key", "0123456789").maskedKey());
-        assertEquals("012...7890", with("api-key", "01234567890").maskedKey());
+        String path = "provider.providers.openai.api-key";
+        assertEquals("-", with(path, "your_openai_api_key_here").activeMaskedKey());
+        assertEquals("-", with(path, "").activeMaskedKey());
+        assertEquals("****", with(path, "sk-short").activeMaskedKey());
+        assertEquals("****", with(path, "0123456789").activeMaskedKey());
+        assertEquals("012...7890", with(path, "01234567890").activeMaskedKey());
+    }
+
+    @Test
+    void aStrayTopLevelKeyIsWarnedAboutAndNeverUsed() throws Exception {
+        java.util.List<String> warnings = new java.util.ArrayList<>();
+        Logger log = Logger.getAnonymousLogger();
+        log.setUseParentHandlers(false);
+        log.addHandler(new java.util.logging.Handler() {
+            @Override public void publish(java.util.logging.LogRecord r) { warnings.add(r.getMessage()); }
+            @Override public void flush() { }
+            @Override public void close() { }
+        });
+        YamlConfiguration y = bundled();
+        y.set("api-key", "sk-leftover-1234567890");
+        Settings s = Settings.load(y, log);
+        assertTrue(warnings.stream().anyMatch(w -> w.contains("no longer used")), warnings.toString());
+        assertEquals("-", s.activeMaskedKey());
+        assertFalse(warnings.toString().contains("leftover"), "the key is never logged");
     }
 
     @Test

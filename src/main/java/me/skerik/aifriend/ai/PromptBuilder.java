@@ -11,7 +11,7 @@ import me.skerik.aifriend.config.Settings;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Builds the single prompt string the proxy accepts. Admin text (name, language, personalization) is trusted and
+ * Builds the single prompt string. Admin text (name, language, personalization) is trusted and
  * goes into the rules. Everything players wrote is untrusted: each line is a JSON object (quotes, newlines and
  * {@code <} are escaped, so a player cannot close the data block or forge another player's line) and the rules
  * tell the model to treat the block as data only.
@@ -27,7 +27,7 @@ public final class PromptBuilder {
     private PromptBuilder() {
     }
 
-    /** Rules and persona plus the data block in one string (what the proxy gets, and what tests and /aifriend simulate show). */
+    /** Rules and persona plus the data block in one string (what the model gets, and what tests and /aifriend simulate show). */
     public static String build(Settings s, List<ChatLine> lines, String lastReply) {
         return system(s, null) + user(lines, List.of(), lastReply);
     }

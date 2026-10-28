@@ -25,7 +25,7 @@ command:
   state:
     running: '<green>running'
     disabled: '<red>disabled (enabled: false in config.yml)'
-    no-key: '<red>idle, api-key is not set in config.yml'
+    no-key: '<red>idle, no provider api-key in config.yml'
     sleeping: '<yellow>sleeping, wakes up in <minutes> min (players were not interested)'
     backoff: '<yellow>waiting <seconds> s before the next attempt (last request failed)'
 

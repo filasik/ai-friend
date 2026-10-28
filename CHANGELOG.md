@@ -1,5 +1,23 @@
 # Changelog
 
+## 3.0.0
+
+**Breaking: the `proxy` provider and the `trial` key are removed.** AI Friend now talks only to the provider you configure yourself: `openai`, `anthropic`, `ollama` or `custom` (any OpenAI-compatible server). The plugin sends nothing to the author's server (the old relay at `gpt.netuj.eu` is no longer contacted). The only other outbound calls are bStats (`metrics: false`) and the GitHub update check (`update-check: false`). `config-version` is now 5.
+
+- Removed: the `proxy` provider (`ProxyProvider`, `ApiClient`), the free 3-day `trial` key and everything around it
+- Removed: the top-level `api-key` and `model` options (they only existed for the proxy). Keys and models live under `provider.providers.<name>.api-key` / `.model`
+- Change: `provider.primary` now defaults to `openai`. Without an API key the bot stays silent and nothing is sent
+- Change: `/aifriend status` shows the key and model of the provider that answers (key still masked); a provider without a model shows `-`
+- Change: the 1.x keys `openai_api_key` and `gpt_version` are no longer migrated to the removed top-level options (they belonged to the proxy)
+- Docs: the privacy notice (README, Modrinth, SpigotMC) now starts with the statement that chat goes only to the provider you choose
+
+Migration (nothing is switched for you, because moving chat to another company would be a change you have to agree to):
+
+1. Update the jar. `config.yml` gets `config-version: 5` and a backup `config.yml.bak-v<old>` is written. None of your values is changed or deleted.
+2. If `provider.primary` is `proxy`, or your config has a top-level `api-key` (for example `trial`) and never chose a provider, the bot stays **inactive and sends nothing**; the log says so in one line at startup. The same goes for a config that lists `proxy` first and a working provider only under `failover`.
+3. Set `provider.primary` to `openai`, `anthropic`, `ollama` or `custom`, put that provider's key under `provider.providers.<name>.api-key`, and run `/aifriend reload`.
+4. A `proxy` entry in `provider.failover` is skipped with a warning. A top-level `api-key` left in the file is ignored (with a warning), is never copied anywhere and can be deleted.
+
 ## 2.2.0
 
 World awareness and personality. Nothing changes until you switch it on: every new feature is **off by default**. `config-version` is now 4; the five new sections (`server-context`, `mood`, `relationships`, `boredom`, `supervision`) are added to your `config.yml` automatically with comments (backup `config.yml.bak-v3`). Database schema v2 adds one table (`aifriend_relationships`); the migration runs the next time the database is opened, which only happens while long-term memory or relationships are enabled. Existing notes are untouched.
@@ -18,9 +36,9 @@ World awareness and personality. Nothing changes until you switch it on: every n
 
 ## 2.1.0
 
-Direct API calls and chat intelligence. Existing installs keep working unchanged: the proxy stays the default provider and every new chat feature is off until you switch it on. `config-version` is now 3; the new sections are added to your `config.yml` automatically with comments (backup `config.yml.bak-v<old>`, `-v0` when coming from a 1.x file).
+Direct API calls and chat intelligence. Existing installs keep working unchanged: the original provider stays the default and every new chat feature is off until you switch it on. `config-version` is now 3; the new sections are added to your `config.yml` automatically with comments (backup `config.yml.bak-v<old>`, `-v0` when coming from a 1.x file).
 
-- New: AI providers. Besides the proxy, chat can go straight to OpenAI, Anthropic (Claude), a local Ollama server or any OpenAI-compatible endpoint (OpenRouter, LM Studio, vLLM, ...), with real system and user roles; select with `provider.primary`, configure under `provider.providers.*`, extra named endpoints with `type: custom`
+- New: AI providers. Besides the original relay, chat can go straight to OpenAI, Anthropic (Claude), a local Ollama server or any OpenAI-compatible endpoint (OpenRouter, LM Studio, vLLM, ...), with real system and user roles; select with `provider.primary`, configure under `provider.providers.*`, extra named endpoints with `type: custom`
 - New: failover chain (`provider.failover`) with a cooldown for failing providers (`provider.failover-cooldown-seconds`)
 - New: optional cache of answers to identical requests (`provider.cache.*`, in memory)
 - New: personas (`personas.*`), picked per request by world and time of day with weights; the prompt text is yours
@@ -34,7 +52,7 @@ Direct API calls and chat intelligence. Existing installs keep working unchanged
 - New: `/aifriend sleep [minutes]`, `/aifriend wake`, `/aifriend simulate [nocall]` (dry run, nothing is posted) and extended `/aifriend status` (provider, persona, memory, muted players)
 - New: permissions `aifriend.mute`, `aifriend.ask`, `aifriend.sleep`, `aifriend.simulate`, `aifriend.cost`, `aifriend.bypass-limits`
 - New: English and Czech messages for all of the above
-- Change: the prompt is split into a system part (rules, persona) and a user part (chat lines as delimited data) for providers that support roles; the proxy still receives one combined message, as before
+- Change: the prompt is split into a system part (rules, persona) and a user part (chat lines as delimited data) for providers that support roles; the original relay still received one combined message, as before
 - Change: API keys of all providers are only stored in `config.yml`, are masked in output and are removed from error messages
 - New: long-term memory (`long-term-memory.*`, off by default): every N answered exchanges one extra request asks the model for durable facts players said about themselves (max 3 notes of 120 characters, nothing sensitive; notes that look like e-mail, phone, link or IP are dropped), stores them by player UUID and puts the best ones about the players in the current chat back into later requests as untrusted `{"note":...,"about":...}` data lines. Notes are matched by shared words or, optionally, by embeddings (`long-term-memory.embeddings.*`: OpenAI-compatible `/embeddings`, Ollama `/api/embed`)
 - New: privacy commands `/aifriend memory [player]`, `/aifriend forget [player]` and `/aifriend forget-all`; muting the bot stops collecting notes and (`delete-on-mute`) deletes them; `max-notes-per-player` and `retention-days` with a daily cleanup
@@ -74,7 +92,7 @@ Last Kotlin/Maven version, Spigot-compatible. Code cleanup.
 
 ## 1.3.0 - 2024-10-21
 
-- New: free `trial` API key (3 days), documentation, API response handling
+- New: documentation, API response handling
 
 ## 1.0.0 - 1.2.0 - 2024-10-20
 

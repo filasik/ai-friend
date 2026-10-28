@@ -18,9 +18,9 @@ import me.skerik.aifriend.longmemory.LongTermMemory;
 /** Builds {@link Settings} for tests without a config file; change a field, then call {@link #build()}. */
 public final class TestSettings {
 
+    /** Key of the default openai provider; blank means no usable provider. Ignored when {@link #provider} is set. */
     public String apiKey = "sk-test1234567890";
     public boolean enabled = true;
-    public String model = "gpt-4o-mini";
     public String chatbotName = "AI Friend";
     public String language = "English";
     public String personalization = "";
@@ -29,7 +29,7 @@ public final class TestSettings {
     public int sleepMinutes = 30;
     public int maxQueuedMessages = 50;
     public int maxReplyLength = 256;
-    public ProviderSettings provider = ProviderSettings.defaults();
+    public ProviderSettings provider;
     public ChatFeatures features = ChatFeatures.defaults();
 
     public static TestSettings defaults() {
@@ -96,9 +96,17 @@ public final class TestSettings {
         return this;
     }
 
+    private ProviderSettings defaultProvider() {
+        org.bukkit.configuration.file.YamlConfiguration y = new org.bukkit.configuration.file.YamlConfiguration();
+        y.set("providers.openai.api-key", apiKey);
+        java.util.logging.Logger quiet = java.util.logging.Logger.getAnonymousLogger();
+        quiet.setLevel(java.util.logging.Level.OFF);
+        return ProviderSettings.load(y, quiet);
+    }
+
     public Settings build() {
-        return new Settings("en", false, false, List.of(), enabled, apiKey, model, chatbotName, language,
+        return new Settings("en", false, false, List.of(), enabled, chatbotName, language,
                 personalization, intervalSeconds, stopWhenIgnored, sleepMinutes, maxQueuedMessages, maxReplyLength,
-                10, 30, provider, features, Settings.Storage.defaults());
+                10, 30, provider == null ? defaultProvider() : provider, features, Settings.Storage.defaults());
     }
 }

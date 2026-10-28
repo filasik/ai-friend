@@ -41,34 +41,6 @@ class HttpProvidersTest {
         server.close();
     }
 
-    // --- proxy ---
-
-    @Test
-    void proxyFlattensSystemFirstAndReturnsRawBody() throws Exception {
-        server.response = "{\"action\":\"say\",\"text\":\"x\"}";
-        var p = new ProxyProvider(java.net.URI.create(server.baseUrl() + "/api/ai_friend.php"), KEY, "gpt-4o-mini", OPTS);
-        ProviderResult r = p.complete(new ProviderRequest(List.of(
-                new ChatMessage(Role.USER, "u1"), new ChatMessage(Role.SYSTEM, "s1")), 50, true));
-        assertEquals("{\"action\":\"say\",\"text\":\"x\"}", r.text());
-        assertEquals(0, r.inputTokens());
-        assertEquals("/api/ai_friend.php", server.path);
-        JsonObject o = server.json();
-        assertEquals("s1\n\nu1", o.get("message").getAsString());
-        assertEquals(KEY, o.get("api_key").getAsString());
-        assertEquals("gpt-4o-mini", o.get("gpt_version").getAsString());
-        assertTrue(o.has("server_ip"));
-        assertEquals(4, o.size(), "same four fields as ApiClient");
-        assertEquals("application/json; charset=utf-8", server.headers.get("Content-Type"));
-        assertEquals("test-agent", server.headers.get("User-Agent"));
-    }
-
-    @Test
-    void proxySingleMessageIsSentUnchanged() throws Exception {
-        var p = new ProxyProvider(java.net.URI.create(server.baseUrl()), KEY, "m", OPTS);
-        p.complete(new ProviderRequest(List.of(new ChatMessage(Role.USER, "just the prompt")), 10, false));
-        assertEquals("just the prompt", server.json().get("message").getAsString());
-    }
-
     // --- openai / custom ---
 
     @Test
@@ -197,7 +169,6 @@ class HttpProvidersTest {
 
     private List<AiProvider> all() {
         return List.of(
-                new ProxyProvider(java.net.URI.create(server.baseUrl()), KEY, "m", OPTS),
                 new OpenAiProvider("openai", server.baseUrl(), KEY, "m", false, OPTS),
                 new AnthropicProvider(server.baseUrl(), KEY, "m", OPTS),
                 new OllamaProvider(server.baseUrl(), "m", OPTS));
@@ -227,7 +198,7 @@ class HttpProvidersTest {
             assertFalse(e.getMessage().contains("SECRETKEY"));
         }
         server.response = "{\"error\":\"model 'x' not found\"}"; // Ollama style
-        ApiException e = assertThrows(ApiException.class, () -> all().get(3).complete(REQ));
+        ApiException e = assertThrows(ApiException.class, () -> all().get(2).complete(REQ));
         assertEquals("HTTP 401: model 'x' not found", e.getMessage());
     }
 
@@ -235,7 +206,7 @@ class HttpProvidersTest {
     void keyShapedTextIsScrubbedEvenWhenItIsNotOurKey() {
         server.status = 401;
         server.response = "{\"error\":{\"message\":\"Incorrect API key provided: sk-proj-abcdef123456\"}}";
-        ApiException e = assertThrows(ApiException.class, () -> all().get(1).complete(REQ));
+        ApiException e = assertThrows(ApiException.class, () -> all().get(0).complete(REQ));
         assertFalse(e.getMessage().contains("abcdef"));
     }
 
@@ -253,7 +224,6 @@ class HttpProvidersTest {
         server.response = "{}";
         var fast = TestServer.options(Duration.ofMillis(300));
         List<AiProvider> providers = List.of(
-                new ProxyProvider(java.net.URI.create(server.baseUrl()), KEY, "m", fast),
                 new OpenAiProvider("openai", server.baseUrl(), KEY, "m", false, fast),
                 new AnthropicProvider(server.baseUrl(), KEY, "m", fast),
                 new OllamaProvider(server.baseUrl(), "m", fast));
@@ -270,8 +240,7 @@ class HttpProvidersTest {
         server.close();
         for (AiProvider p : List.of(
                 new OpenAiProvider("openai", url, KEY, "m", false, OPTS),
-                new AnthropicProvider(url, KEY, "m", OPTS),
-                new ProxyProvider(java.net.URI.create(url), KEY, "m", OPTS))) {
+                new AnthropicProvider(url, KEY, "m", OPTS))) {
             IOException e = assertThrows(IOException.class, () -> p.complete(REQ));
             assertFalse(stack(e).contains("SECRETKEY"));
             assertNull(e.getCause());

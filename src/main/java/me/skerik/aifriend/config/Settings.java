@@ -15,7 +15,7 @@ import org.bukkit.configuration.file.FileConfiguration;
  */
 public record Settings(
         String locale, boolean updateCheck, boolean metrics, List<String> aliases,
-        boolean enabled, String apiKey, String model, String chatbotName, String language, String personalization,
+        boolean enabled, String chatbotName, String language, String personalization,
         int intervalSeconds, boolean stopWhenIgnored, int sleepMinutes,
         int maxQueuedMessages, int maxReplyLength, int connectTimeoutSeconds, int readTimeoutSeconds,
         ProviderSettings provider, ChatFeatures features, Storage storage
@@ -48,17 +48,19 @@ public record Settings(
         }
     }
 
-    public static final String KEY_PLACEHOLDER = "your_openai_api_key_here";
-
     public static Settings load(FileConfiguration c, Logger log) {
+        for (String stray : new String[] {"api-key", "openai_api_key"}) {
+            if (!ProviderSettings.isUnset(c.getString(stray, ""))) {
+                log.warning("The top-level " + stray + " in config.yml is no longer used (keys now live under "
+                        + "provider.providers.<name>.api-key). Move it there if you need it and delete this line.");
+            }
+        }
         return new Settings(
                 c.getString("locale", "en").toLowerCase(Locale.ROOT).strip(),
                 c.getBoolean("update-check", true),
                 c.getBoolean("metrics", true),
                 c.getStringList("command.aliases").stream().map(String::strip).filter(a -> !a.isEmpty()).toList(),
                 c.getBoolean("enabled", true),
-                c.getString("api-key", KEY_PLACEHOLDER).strip(),
-                text(c, "model", "gpt-4o-mini", log),
                 text(c, "chatbot-name", "AI Friend", log),
                 text(c, "language", "English", log),
                 c.getString("personalization", "").strip(),
@@ -99,32 +101,20 @@ public record Settings(
                 m == null ? "" : m.getString("ssl-mode", "").strip());
     }
 
-    /** True when the admin has put a key in (the shipped placeholder and an empty value mean "not set"). */
-    public boolean hasApiKey() {
-        return !apiKey.isEmpty() && !apiKey.equals(KEY_PLACEHOLDER);
-    }
-
-    /** The key for status output: never the whole secret. {@code trial} is not a secret. */
-    public String maskedKey() {
-        return mask(hasApiKey() ? apiKey : "");
-    }
-
-    /** Masked key of the provider that answers: the top-level api-key for the proxy, else the provider's own key. */
+    /** Key of the provider that answers, for status output: never the whole secret. */
     public String activeMaskedKey() {
         ProviderSettings.Entry primary = provider.providers().get(provider.primary());
-        if (primary == null || primary.type() == ProviderSettings.Type.PROXY) return maskedKey();
-        return ProviderSettings.isUnset(primary.apiKey()) ? "-" : mask(primary.apiKey());
+        return primary == null || ProviderSettings.isUnset(primary.apiKey()) ? "-" : mask(primary.apiKey());
     }
 
-    /** Model of the provider that answers (the top-level model for the proxy). */
+    /** Model of the provider that answers ("-" when it has none, e.g. an unconfigured custom server). */
     public String activeModel() {
         ProviderSettings.Entry primary = provider.providers().get(provider.primary());
-        return primary == null || primary.type() == ProviderSettings.Type.PROXY || primary.model().isEmpty() ? model : primary.model();
+        return primary == null || primary.model().isEmpty() ? "-" : primary.model();
     }
 
     static String mask(String key) {
         if (key.isEmpty()) return "-";
-        if (key.equals("trial")) return "trial";
         if (key.length() <= 10) return "****";
         return key.substring(0, 3) + "..." + key.substring(key.length() - 4);
     }

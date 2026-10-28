@@ -2,7 +2,7 @@ package me.skerik.aifriend.ai;
 
 import java.io.IOException;
 
-/** The proxy answered with an HTTP status other than 200. */
+/** The AI service answered with an HTTP status other than 200. */
 public final class ApiException extends IOException {
 
     private static final long serialVersionUID = 1L;

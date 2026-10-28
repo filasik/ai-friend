@@ -14,20 +14,17 @@ public final class ProviderFactory {
     private ProviderFactory() {
     }
 
-    /**
-     * @param proxyApiKey the top-level {@code api-key} (empty when not set), used by the proxy provider
-     * @param proxyModel  the top-level {@code model}, used by the proxy provider
-     * @return empty when no provider in the chain is usable (missing key / model / URL); each reason was logged
-     */
-    public static Optional<AiProvider> create(ProviderSettings settings, String proxyApiKey, String proxyModel,
-                                              HttpOptions http, Clock clock, Logger log) {
+    /** @return empty when no provider in the chain is usable (missing key / model / URL); each reason was logged */
+    public static Optional<AiProvider> create(ProviderSettings settings, HttpOptions http, Clock clock, Logger log) {
+        // a config that still names the retired proxy stays inactive until the admin picks a provider (AIFriend logs it)
+        if (settings.retiredProxy()) return Optional.empty();
         List<String> names = new ArrayList<>();
         names.add(settings.primary());
         names.addAll(settings.failover());
 
         List<AiProvider> chain = new ArrayList<>();
         for (String name : names) {
-            AiProvider p = build(settings.providers().get(name), proxyApiKey, proxyModel, http, log);
+            AiProvider p = build(settings.providers().get(name), http, log);
             if (p != null) chain.add(p);
         }
         if (chain.isEmpty()) return Optional.empty();
@@ -42,16 +39,9 @@ public final class ProviderFactory {
     }
 
     /** A single provider, or null (with a logged reason) when it lacks something it needs. Never logs a key. */
-    static AiProvider build(Entry e, String proxyApiKey, String proxyModel, HttpOptions http, Logger log) {
+    static AiProvider build(Entry e, HttpOptions http, Logger log) {
         String path = "provider.providers." + e.name();
         switch (e.type()) {
-            case PROXY -> {
-                if (ProviderSettings.isUnset(proxyApiKey)) {
-                    log.warning("Provider \"" + e.name() + "\" skipped: api-key is not set");
-                    return null;
-                }
-                return new ProxyProvider(proxyApiKey, proxyModel, http);
-            }
             case OPENAI -> {
                 if (e.apiKey().isEmpty()) return missing(log, path + ".api-key", e.name());
                 return new OpenAiProvider(e.name(), e.baseUrl(), e.apiKey(), e.model(), false, http);

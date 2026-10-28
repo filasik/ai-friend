@@ -11,16 +11,17 @@ import org.bukkit.configuration.ConfigurationSection;
 /**
  * Immutable snapshot of the {@code provider:} section of config.yml. Same rules as {@code config/Settings}: every
  * value is validated, an invalid one falls back to the default and is logged. The five built-in names
- * (proxy, openai, anthropic, ollama, custom) always exist with defaults; {@code providers.<name>} overrides them, and
+ * (openai, anthropic, ollama, custom) always exist with defaults; {@code providers.<name>} overrides them, and
  * additional names can be declared with an explicit {@code type}.
  */
 public record ProviderSettings(
         String primary, Map<String, Entry> providers, List<String> failover,
-        boolean cacheEnabled, int cacheMaxEntries, int cacheTtlMinutes, int failoverCooldownSeconds
+        boolean cacheEnabled, int cacheMaxEntries, int cacheTtlMinutes, int failoverCooldownSeconds,
+        boolean retiredProxy
 ) {
 
     public enum Type {
-        PROXY, OPENAI, ANTHROPIC, OLLAMA, CUSTOM;
+        OPENAI, ANTHROPIC, OLLAMA, CUSTOM;
 
         static Type parse(String s) {
             if (s == null) return null;
@@ -36,13 +37,16 @@ public record ProviderSettings(
     public record Entry(String name, Type type, String model, String baseUrl, String apiKey, int maxOutputTokens) {
     }
 
-    public static final String DEFAULT_PRIMARY = "proxy";
+    public static final String DEFAULT_PRIMARY = "openai";
     public static final int DEFAULT_MAX_OUTPUT_TOKENS = 200;
 
     public ProviderSettings {
         providers = Map.copyOf(providers);
         failover = List.copyOf(failover);
     }
+
+    /** The provider name that AI Friend 2.x shipped and 3.0 removed (it forwarded chat to the author's server). */
+    static final String RETIRED = "proxy";
 
     /** Max output tokens of the primary provider (what ChatBot should put into {@link ProviderRequest}). */
     public int maxOutputTokens() {
@@ -72,7 +76,7 @@ public record ProviderSettings(
                 ConfigurationSection s = configured.getConfigurationSection(name);
                 Type type = s == null ? null : Type.parse(s.getString("type"));
                 if (type == null) {
-                    log.warning("provider.providers." + name + ".type must be one of proxy, openai, anthropic, ollama, "
+                    log.warning("provider.providers." + name + ".type must be one of openai, anthropic, ollama, "
                             + "custom; ignoring this provider");
                     continue;
                 }
@@ -82,7 +86,10 @@ public record ProviderSettings(
 
         String primary = root == null ? DEFAULT_PRIMARY : root.getString("primary", DEFAULT_PRIMARY).strip()
                 .toLowerCase(Locale.ROOT);
-        if (!entries.containsKey(primary)) {
+        boolean retired = primary.equals(RETIRED);
+        if (retired) {
+            primary = DEFAULT_PRIMARY; // never used for requests: the chain stays empty (see ProviderFactory)
+        } else if (!entries.containsKey(primary)) {
             log.warning("provider.primary \"" + primary + "\" is not a known provider; using \"" + DEFAULT_PRIMARY + "\"");
             primary = DEFAULT_PRIMARY;
         }
@@ -91,7 +98,9 @@ public record ProviderSettings(
         if (root != null) {
             for (String raw : root.getStringList("failover")) {
                 String name = raw.strip().toLowerCase(Locale.ROOT);
-                if (!entries.containsKey(name)) {
+                if (name.equals(RETIRED)) {
+                    log.warning("provider.failover: \"proxy\" no longer exists and was skipped");
+                } else if (!entries.containsKey(name)) {
                     log.warning("provider.failover: unknown provider \"" + name + "\" ignored");
                 } else if (name.equals(primary) || failover.contains(name)) {
                     log.warning("provider.failover: \"" + name + "\" is already in the chain and was ignored");
@@ -106,7 +115,8 @@ public record ProviderSettings(
                 cache != null && cache.getBoolean("enabled", false),
                 bounded(cache, "provider.cache.max-entries", "max-entries", 1, 10_000, 200, log),
                 bounded(cache, "provider.cache.ttl-minutes", "ttl-minutes", 1, 1440, 10, log),
-                bounded(root, "provider.failover-cooldown-seconds", "failover-cooldown-seconds", 5, 3600, 60, log));
+                bounded(root, "provider.failover-cooldown-seconds", "failover-cooldown-seconds", 5, 3600, 60, log),
+                retired);
     }
 
     private static Entry entry(String name, Type type, ConfigurationSection s, Logger log) {
@@ -140,7 +150,7 @@ public record ProviderSettings(
             case OPENAI -> "gpt-4o-mini";
             case ANTHROPIC -> "claude-haiku-5-5";
             case OLLAMA -> "llama3.2";
-            case PROXY, CUSTOM -> "";
+            case CUSTOM -> "";
         };
     }
 
@@ -149,7 +159,7 @@ public record ProviderSettings(
             case OPENAI -> OpenAiProvider.DEFAULT_BASE_URL;
             case ANTHROPIC -> AnthropicProvider.DEFAULT_BASE_URL;
             case OLLAMA -> OllamaProvider.DEFAULT_BASE_URL;
-            case PROXY, CUSTOM -> "";
+            case CUSTOM -> "";
         };
     }
 

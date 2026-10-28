@@ -165,7 +165,7 @@ class ChatBotTest {
     }
 
     private ChatBot newBot(Settings s) {
-        return new ChatBot(log, scheduler, x -> x.hasApiKey() ? Optional.of(provider) : Optional.empty(),
+        return new ChatBot(log, scheduler, x -> x.provider().providers().get(x.provider().primary()).apiKey().isEmpty() ? Optional.empty() : Optional.of(provider),
                 (name, text) -> said.add(name + "|" + text),
                 new ChatBot.Notifier() {
                     @Override
@@ -265,7 +265,7 @@ class ChatBotTest {
     @Test
     void tickDoesNothingWithoutKey() {
         TestSettings t = TestSettings.defaults();
-        t.apiKey = Settings.KEY_PLACEHOLDER;
+        t.apiKey = "";
         bot = newBot(t.build());
         chat("a", "hello");
         bot.tick();
@@ -547,7 +547,7 @@ class ChatBotTest {
     @Test
     void reloadRebuildsTheProviderFromTheNewSettings() {
         TestSettings t = TestSettings.defaults();
-        t.apiKey = Settings.KEY_PLACEHOLDER;
+        t.apiKey = "";
         bot.reload(t.build());
         assertEquals(ChatBot.State.NO_KEY, state());
         bot.reload(TestSettings.defaults().build());
@@ -1142,7 +1142,7 @@ class ChatBotTest {
 
         // NO_KEY
         t = TestSettings.defaults();
-        t.apiKey = Settings.KEY_PLACEHOLDER;
+        t.apiKey = "";
         bot = newBot(t.build());
         r = simulate(true);
         assertTrue(r.blockers().contains(Blocker.NO_KEY), r.blockers().toString());

@@ -66,7 +66,7 @@ class ConfigUpdaterTest {
 
         String out = user.saveToString();
         assertTrue(out.contains("# my own note"), out);
-        assertTrue(out.contains("Model to use"), out); // the comment of a new key came along
+        assertTrue(out.contains("How the bot is named in chat"), out); // the comment of a new key came along
 
         // a second pass changes nothing
         YamlConfiguration again = load(out);
@@ -83,10 +83,8 @@ class ConfigUpdaterTest {
         int moved = ConfigUpdater.migrate(user, ConfigUpdater.RENAMES);
 
         assertEquals(ConfigUpdater.RENAMES.size(), moved);
-        assertEquals("sk-test123456789", user.getString("api-key"));
         assertFalse(user.getBoolean("stop-when-ignored"));
         assertEquals(120, user.getInt("interval-seconds"));
-        assertEquals("gpt-4o", user.getString("model"));
         assertEquals("Bob", user.getString("chatbot-name"));
         assertEquals("Czech", user.getString("language"));
         assertTrue(user.getBoolean("enabled"));
@@ -98,9 +96,7 @@ class ConfigUpdaterTest {
         assertTrue(user.contains("http.connect-timeout-seconds", true));
 
         String out = user.saveToString();
-        assertTrue(out.contains("Model to use"), out);
         assertTrue(out.contains("How the bot is named in chat"), out);
-        assertFalse(out.contains("openai_api_key:"), out);
 
         // a second pass changes nothing
         YamlConfiguration again = load(out);
@@ -111,12 +107,9 @@ class ConfigUpdaterTest {
         Logger log = Logger.getLogger("ConfigUpdaterTest");
         log.setLevel(Level.OFF);
         Settings s = Settings.load(again, log);
-        assertEquals("sk-test123456789", s.apiKey());
-        assertTrue(s.hasApiKey());
         assertTrue(s.enabled());
         assertFalse(s.stopWhenIgnored());
         assertEquals(120, s.intervalSeconds());
-        assertEquals("gpt-4o", s.model());
         assertEquals("Bob", s.chatbotName());
         assertEquals("Czech", s.language());
         assertEquals("hi", s.personalization());
@@ -130,7 +123,7 @@ class ConfigUpdaterTest {
 
     @Test
     void bundledConfigDeclaresAVersion() throws Exception {
-        assertEquals(4, bundled().getInt(ConfigUpdater.VERSION_KEY, 0));
+        assertEquals(5, bundled().getInt(ConfigUpdater.VERSION_KEY, 0));
     }
 
     private static final java.util.List<String> NEW_SECTIONS = java.util.List.of("provider", "personas", "memory",
@@ -167,7 +160,7 @@ class ConfigUpdaterTest {
             assertTrue(user.isConfigurationSection(section), section + " missing");
             assertFalse(user.getComments(section).isEmpty(), section + " has no comment");
         }
-        assertEquals(4, user.getInt(ConfigUpdater.VERSION_KEY));
+        assertEquals(5, user.getInt(ConfigUpdater.VERSION_KEY));
         assertTrue(out.contains("Conversation memory"), out);
         assertTrue(out.contains("Rate limits"), out);
     }
@@ -180,7 +173,6 @@ class ConfigUpdaterTest {
         ConfigUpdater.migrate(user, ConfigUpdater.RENAMES);
         String out = user.saveToString();
         assertNewSectionsWithComments(user, out);
-        assertEquals("sk-test123456789", user.getString("api-key"));
         assertEquals(2, user.getMapList("personas.list").size());
         YamlConfiguration again = load(out);
         assertEquals(0, ConfigUpdater.merge(again, defaults));
@@ -199,8 +191,7 @@ class ConfigUpdaterTest {
         assertEquals("cs", user.getString("locale"));
         assertFalse(user.getBoolean("update-check"));
         assertEquals(java.util.List.of("friend"), user.getStringList("command.aliases"));
-        assertEquals("sk-abcdefghijkl", user.getString("api-key"));
-        assertEquals("gpt-4o", user.getString("model"));
+        assertEquals("sk-abcdefghijkl", user.getString("api-key"), "the old value is never touched or deleted");
         assertEquals("Bob", user.getString("chatbot-name"));
         assertEquals("Czech", user.getString("language"));
         assertEquals("hello", user.getString("personalization"));
@@ -265,7 +256,7 @@ class ConfigUpdaterTest {
         YamlConfiguration defaults = bundled();
         assertTrue(ConfigUpdater.merge(user, defaults) > 0);
         String out = user.saveToString();
-        assertEquals(4, user.getInt(ConfigUpdater.VERSION_KEY));
+        assertEquals(5, user.getInt(ConfigUpdater.VERSION_KEY));
         assertTrue(out.contains("# my provider note"), out);
         assertEquals("openai", user.getString("provider.primary"));
         assertEquals("sk-openai-abcdefgh", user.getString("provider.providers.openai.api-key"));
@@ -309,7 +300,7 @@ class ConfigUpdaterTest {
         YamlConfiguration defaults = bundled();
         assertTrue(ConfigUpdater.merge(user, defaults) > 0);
         String out = user.saveToString();
-        assertEquals(4, user.getInt(ConfigUpdater.VERSION_KEY));
+        assertEquals(5, user.getInt(ConfigUpdater.VERSION_KEY));
         assertEquals(45, user.getInt("interval-seconds"));
         assertTrue(user.getBoolean("long-term-memory.enabled"));
         assertEquals(9, user.getInt("long-term-memory.retrieval-top-k"));
@@ -327,5 +318,79 @@ class ConfigUpdaterTest {
         log.setLevel(Level.OFF);
         Awareness a = Settings.load(again, log).features().awareness();
         assertEquals(Awareness.defaults(), a);
+    }
+
+    // ---- removal of the proxy provider (config-version 5) ----
+
+    private static boolean inactive(Settings s) {
+        var http = new me.skerik.aifriend.ai.provider.HttpOptions(java.time.Duration.ofSeconds(1),
+                java.time.Duration.ofSeconds(1), "test");
+        Logger quiet = Logger.getAnonymousLogger();
+        quiet.setLevel(Level.OFF);
+        return me.skerik.aifriend.ai.provider.ProviderFactory.create(s.provider(), http, java.time.Clock.systemUTC(), quiet)
+                .isEmpty();
+    }
+
+    private static Settings settingsOf(YamlConfiguration y, java.util.List<String> warnings) {
+        Logger log = Logger.getAnonymousLogger();
+        log.setUseParentHandlers(false);
+        log.addHandler(new java.util.logging.Handler() {
+            @Override public void publish(java.util.logging.LogRecord r) { warnings.add(r.getMessage()); }
+            @Override public void flush() { }
+            @Override public void close() { }
+        });
+        return Settings.load(y, log);
+    }
+
+    @Test
+    void oldProxyConfigIsNotSwitchedToAnotherProvider() throws Exception {
+        // 2.0.0: top-level key (maybe "trial"), no provider section at all
+        for (String text : new String[] {V200, "config-version: 1\napi-key: trial\n", LEGACY}) {
+            YamlConfiguration user = load(text);
+            ConfigUpdater.flagRetiredProxy(user);
+            ConfigUpdater.merge(user, bundled());
+            ConfigUpdater.migrate(user, ConfigUpdater.RENAMES);
+            assertEquals("proxy", user.getString("provider.primary"), "marker instead of a silent switch to openai");
+            java.util.List<String> warnings = new java.util.ArrayList<>();
+            Settings s = settingsOf(user, warnings);
+            assertTrue(s.provider().retiredProxy());
+            assertTrue(inactive(s), "no provider may be built");
+        }
+    }
+
+    @Test
+    void configWithoutAnyKeyJustGetsTheNewDefault() throws Exception {
+        YamlConfiguration user = load(OLD);
+        ConfigUpdater.flagRetiredProxy(user);
+        ConfigUpdater.merge(user, bundled());
+        assertEquals("openai", user.getString("provider.primary"));
+        assertFalse(settingsOf(user, new java.util.ArrayList<>()).provider().retiredProxy());
+    }
+
+    @Test
+    void anExplicitProviderChoiceIsNeverTouched() throws Exception {
+        String text = "config-version: 4\napi-key: trial\nprovider:\n  primary: ollama\n";
+        YamlConfiguration user = load(text);
+        ConfigUpdater.flagRetiredProxy(user);
+        ConfigUpdater.merge(user, bundled());
+        assertEquals("ollama", user.getString("provider.primary"));
+        assertEquals("trial", user.getString("api-key"), "admin values stay");
+        java.util.List<String> warnings = new java.util.ArrayList<>();
+        Settings s = settingsOf(user, warnings);
+        assertFalse(s.provider().retiredProxy());
+        assertTrue(warnings.stream().anyMatch(w -> w.contains("no longer used")), warnings.toString());
+    }
+
+    @Test
+    void version4ConfigWithProxyPrimaryKeepsItsValueAndStaysInactive() throws Exception {
+        YamlConfiguration user = load("config-version: 4\nprovider:\n  primary: proxy\n  failover: [openai]\n"
+                + "  providers:\n    openai:\n      api-key: sk-real-abcdefghijkl\n");
+        ConfigUpdater.flagRetiredProxy(user);
+        ConfigUpdater.merge(user, bundled());
+        assertEquals("proxy", user.getString("provider.primary"));
+        assertEquals(5, user.getInt(ConfigUpdater.VERSION_KEY));
+        Settings s = settingsOf(user, new java.util.ArrayList<>());
+        assertTrue(s.provider().retiredProxy());
+        assertTrue(inactive(s), "the openai key must not make the bot send chat elsewhere");
     }
 }

@@ -130,8 +130,6 @@ class EmbedderTest {
         // no embeddings API / unknown / missing key: keyword fallback
         t.longMemory(backend("anthropic", "", ""));
         assertTrue(EmbedderFactory.create(t.build(), http(), LOG).isEmpty());
-        t.longMemory(backend("proxy", "", ""));
-        assertTrue(EmbedderFactory.create(t.build(), http(), LOG).isEmpty());
         t.longMemory(backend("nonsense", "", ""));
         assertTrue(EmbedderFactory.create(t.build(), http(), LOG).isEmpty());
         t.provider = ProviderSettings.defaults();

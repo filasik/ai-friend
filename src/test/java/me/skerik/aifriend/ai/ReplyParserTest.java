@@ -68,7 +68,7 @@ class ReplyParserTest {
     }
 
     @Test
-    void proxyErrorObjectIsAnIoException() {
+    void errorObjectIsAnIoException() {
         assertThrows(IOException.class, () -> parse("{\"error\":\"Invalid key\"}"));
     }
 

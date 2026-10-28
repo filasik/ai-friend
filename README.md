@@ -18,26 +18,25 @@ It reads the public chat and posts short replies as a bot of your own name, lang
 
 ---
 
-> **Privacy first.** Recent chat lines (with player names) are sent to the AI service you choose when the bot is active. Read [Privacy and data](#privacy-and-data) before you enable it on a public server.
+> **Privacy first.** Chat lines, including player names, are sent only to the AI provider you choose yourself (OpenAI, Anthropic, your own Ollama or another OpenAI-compatible server). Nothing goes through the plugin author, and the plugin has no server of its own. Read [Privacy and data](#privacy-and-data) before you enable it on a public server.
 
 ## Highlights
 
 - **Chat companion.** Collects what players write and answers with one short message per interval, as `<chatbot-name>: <reply>`.
-- **Your choice of AI.** The old proxy (default, unchanged), OpenAI, Anthropic Claude, a local Ollama server or any OpenAI-compatible endpoint, with a failover chain and an optional answer cache.
+- **Your choice of AI.** OpenAI (default), Anthropic Claude, a local Ollama server or any OpenAI-compatible endpoint, with a failover chain and an optional answer cache.
 - **Chat intelligence, all optional and off by default.** Personas, conversation memory, rate and daily limits, cost estimate, reply filter, direct questions (`/ai`, `@Name`), per-player mute and reactions to game events.
 - **Long-term memory** (optional, off by default). The bot remembers what players told it about themselves, in SQLite or MariaDB, and players can list and delete their notes.
 - **Integrations.** A public API (`AiFriendResponseEvent`, `AiFriendApi`) and PlaceholderAPI placeholders such as `%aifriend_mood%`.
 - **Yours to shape.** Bot name, reply language and a free-text `personalization` (your website, jokes, house rules, ...).
 - **Knows when to be quiet.** If players seem annoyed with the bot, it sleeps for `sleep-minutes`. One player alone cannot silence it for everyone.
 - **Never blocks the server.** Network calls are asynchronous with timeouts, failures back off exponentially and every error is caught and logged as one clear line.
-- **Free trial.** The special key `trial` (proxy provider) works for 3 days, no account needed.
 - **Low maintenance.** Commented `config.yml` that is never overwritten and gains new options on update, editable messages (English and Czech), update notices from GitHub.
 - **Folia-compatible code.** No `BukkitScheduler`; everything goes through region/global/async schedulers.
 
 ## Quick start
 
-1. Put `ai-friend-2.1.0.jar` in `plugins/` and start the server.
-2. Open `plugins/ai-friend/config.yml` and set `api-key: "trial"` (3 days free, via the proxy) or pick a provider, see [Provider setup](#provider-setup).
+1. Put `ai-friend-3.0.0.jar` in `plugins/` and start the server.
+2. Open `plugins/ai-friend/config.yml` and choose a provider and put its API key under `provider.providers.<name>.api-key`, see [Provider setup](#provider-setup).
 3. Run `/aifriend reload`, then `/aifriend status` to check the bot is running.
 
 > The default placeholders (`your_openai_api_key_here`, `your_anthropic_api_key_here`) mean "not set": the bot stays silent and nothing is sent anywhere.
@@ -48,8 +47,8 @@ It reads the public chat and posts short replies as a bot of your own name, lang
 |---|---|
 | Server | Paper **26.3** or newer (**Paper only**; Spigot and plain Bukkit are not supported since 2.0.0) |
 | Java | **25** |
-| Network | Outbound HTTPS to the provider you use: `gpt.netuj.eu` (proxy), `api.openai.com`, `api.anthropic.com`, your own endpoint, or nothing outside your network for a local Ollama. Plus `api.github.com` for update checks |
-| Key | `trial`, an OpenAI key, an Anthropic key, or none for Ollama / keyless local servers |
+| Network | Outbound HTTPS to the provider you use: `api.openai.com`, `api.anthropic.com`, your own endpoint, or nothing outside your network for a local Ollama. Plus `api.github.com` for update checks |
+| Key | An OpenAI key, an Anthropic key, or none for Ollama / keyless local servers |
 
 The old 1.x jar (Spigot-compatible) is still available on the [GitHub releases](https://github.com/filasik/ai-friend/releases) page.
 
@@ -80,8 +79,7 @@ Set `provider.primary` and fill in that provider under `provider.providers`. Onl
 
 | Provider | `provider.primary` | Needs | Chat goes to |
 |---|---|---|---|
-| Proxy (default) | `proxy` | top-level `api-key` (`trial` or OpenAI key) and `model` | `gpt.netuj.eu`, then OpenAI |
-| OpenAI | `openai` | `providers.openai.api-key` | `api.openai.com` |
+| OpenAI (default) | `openai` | `providers.openai.api-key` | `api.openai.com` |
 | Anthropic Claude | `anthropic` | `providers.anthropic.api-key` | `api.anthropic.com` |
 | Ollama | `ollama` | a running Ollama, no key | your Ollama server (default `localhost`) |
 | Custom (OpenAI-compatible) | `custom` | `base-url` and `model`, key if the server wants one | the `base-url` you set |
@@ -179,7 +177,7 @@ Optional and **off by default** (`long-term-memory.enabled`). The bot remembers 
 2. Notes are stored by player UUID in the [database](#database) (`storage`), at most `max-notes-per-player` per player (the least recently used are dropped) and, with `retention-days`, no longer than that without being used. A cleanup runs once a day.
 3. For every answer the best `retrieval-top-k` notes about the players in the current chat are added to the request as `{"note":"...","about":"Name"}` lines in the **data** block. Notes come from player text, so they are untrusted data like chat lines, never part of the system rules. Extraction never delays an answer: it runs afterwards on its own task and is skipped while the bot is rate limited, asleep or backing off.
 
-**Which notes fit?** With `embeddings.backend: none` (default) notes are matched by shared words, which is free and works with every provider. Set `embeddings.backend` to the name of an entry under `provider.providers` (`openai`, `custom` for any OpenAI-compatible server, or `ollama`) to match by meaning instead; the default models are `text-embedding-3-small` (OpenAI-compatible) and `nomic-embed-text` (Ollama), `embeddings.model` and `embeddings.base-url` override them. Anthropic and the proxy have no embeddings API, so they fall back to words. If the embedding service fails, words are used for a minute. Every note and every request text is also sent to the embedding service.
+**Which notes fit?** With `embeddings.backend: none` (default) notes are matched by shared words, which is free and works with every provider. Set `embeddings.backend` to the name of an entry under `provider.providers` (`openai`, `custom` for any OpenAI-compatible server, or `ollama`) to match by meaning instead; the default models are `text-embedding-3-small` (OpenAI-compatible) and `nomic-embed-text` (Ollama), `embeddings.model` and `embeddings.base-url` override them. Anthropic has no embeddings API, so they fall back to words. If the embedding service fails, words are used for a minute. Every note and every request text is also sent to the embedding service.
 
 **Privacy.** See [Privacy and data](#privacy-and-data). Players control their notes:
 
@@ -288,8 +286,6 @@ AiFriendApi api = Bukkit.getServicesManager().load(AiFriendApi.class); // null u
 | `metrics` | `true` | Anonymous bStats statistics |
 | `command.aliases` | `[]` | Extra aliases for `/aifriend` (restart needed) |
 | `enabled` | `true` | Switch the bot on or off |
-| `api-key` | `your_openai_api_key_here` | Proxy provider: `trial` for the 3-day free trial, or your OpenAI key. The default value means "not set" |
-| `model` | `gpt-4o-mini` | Proxy provider: model name. Ignored with the `trial` key |
 | `chatbot-name` | `AI Friend` | Name shown in front of replies |
 | `language` | `English` | Language the bot replies in (free text, e.g. `Czech`) |
 | `personalization` | empty | Free-text instructions for the bot: your website, jokes, tone |
@@ -300,7 +296,7 @@ AiFriendApi api = Bukkit.getServicesManager().load(AiFriendApi.class); // null u
 | `max-reply-length` | `256` | Longer replies are shortened (20-1000) |
 | `http.connect-timeout-seconds` | `10` | HTTP connect timeout (1-120) |
 | `http.read-timeout-seconds` | `30` | HTTP read timeout (1-120) |
-| `provider.primary` | `proxy` | `proxy`, `openai`, `anthropic`, `ollama`, `custom` or a name you define |
+| `provider.primary` | `openai` | `openai`, `anthropic`, `ollama`, `custom` or a name you define |
 | `provider.failover` | `[]` | Providers to try, in order, when the primary fails |
 | `provider.failover-cooldown-seconds` | `60` | How long a failing provider is skipped |
 | `provider.cache.enabled` | `false` | Remember answers to identical requests |
@@ -377,7 +373,6 @@ Example:
 
 ```yaml
 enabled: true
-api-key: "trial"
 chatbot-name: "Buddy"
 language: "Czech"
 personalization: "You are the friendly helper of the server example.com. Mention /spawn to new players."
@@ -398,9 +393,8 @@ What leaves your server depends on `provider.primary` (and `provider.failover`).
 
 | Provider | What is sent, and where |
 |---|---|
-| `proxy` | HTTPS to `https://gpt.netuj.eu/api/ai_friend.php`, **operated by the plugin author**, who forwards it to OpenAI. Additionally: your `api-key` (`trial` or your OpenAI key), the `model` name and the address of your server as seen by the proxy (the connecting IP address) |
-| `openai` | HTTPS directly to `api.openai.com` (or your `base-url`) with your key as an `Authorization` header. No proxy involved. OpenAI's own data terms apply |
-| `anthropic` | HTTPS directly to `api.anthropic.com` with your key in the `x-api-key` header. No proxy involved. Anthropic's own data terms apply |
+| `openai` | HTTPS directly to `api.openai.com` (or your `base-url`) with your key as an `Authorization` header. Nobody in between. OpenAI's own data terms apply |
+| `anthropic` | HTTPS directly to `api.anthropic.com` with your key in the `x-api-key` header. Nobody in between. Anthropic's own data terms apply |
 | `ollama` | Only to your Ollama server (`localhost` by default). Nothing leaves your machine if Ollama runs there; if you point `base-url` at another host, the chat goes there |
 | `custom` | To the `base-url` you configured (OpenRouter, your own server, ...). The operator of that endpoint sees the chat |
 
@@ -408,7 +402,7 @@ Please note:
 
 - **Chat of your players is sent to a third party** unless you use a local Ollama or your own server. If you run a public server, mention it in your rules or privacy policy and in the privacy notices that your jurisdiction requires.
 - With a failover chain, the chat goes to whichever provider ends up answering; every member of the chain is a potential recipient.
-- API keys live only in `config.yml`, in plain text like any plugin setting. Keep that file private. Keys are masked in `/aifriend status` and removed from error messages and the log; they are sent only in request headers (or, for the proxy, in the request body). Redirects are not followed.
+- API keys live only in `config.yml`, in plain text like any plugin setting. Keep that file private. Keys are masked in `/aifriend status` and removed from error messages and the log; they are sent only in request headers to the provider they belong to. Redirects are not followed.
 - Muted players (`opt-out`) are never stored or sent. The mute list (`muted-players.yml`) holds player UUIDs on your server.
 - **Long-term memory** (off by default) is the one feature that stores player data. It stores, in your own database (`storage`): the player UUID, the player name, a short note (max 120 characters, written by the model from what the player said about themselves), when it was made and last used, and optionally an embedding vector of the note. Nothing else of the chat is saved. To find the notes, **an extra request sends the recent chat lines (with player names) to your AI provider every `extract-every-exchanges` answers**, and with embeddings the notes and chat text also go to the embedding service. Tell your players. The model is told to keep nothing sensitive, notes that look like contact data are dropped by the plugin, but a model can make mistakes: review `/aifriend memory <player>` if in doubt. Players see and delete their notes with `/aifriend memory` and `/aifriend forget`, admins with `forget <player>` and `forget-all`, muting stops collection and (by default) deletes the notes, and `retention-days` removes old ones. With MariaDB the notes live on your database server and are shared by all servers that use it.
 - **World awareness** (all off by default). *Server context* sends, with every request, the time, the weather, the number of players online and, for the players who wrote, their world, biome and nearby hostile mobs (never coordinates) to your AI provider. *Relationships* store, in your own database, the player UUID, the last name, the number of answered exchanges, the first and last time and an optional nickname the player typed; `/aifriend forget` deletes it, muting the bot deletes it and stops collecting, and the nickname and level are sent to the provider with the chat lines of that player. *Mood* and *boredom* keep only counters in memory. *Chat supervision* reads public chat lines in memory only (it makes no request, stores nothing and does not look at players who muted the bot).
@@ -417,13 +411,22 @@ Please note:
 
 ## Upgrading
 
+**From 2.x to 3.0.0 (breaking).** The provider that 2.x used by default (a relay run by the plugin author) and its free 3-day key are gone, and so are the top-level `api-key` and `model` options: keys and models now live under `provider.providers.<name>`. The plugin never switches your chat to another company by itself:
+
+- If your `config.yml` still selects the removed provider in `provider.primary`, or has a top-level `api-key` and never chose a provider, the bot stays **inactive and sends nothing**; the log says so in one line. To continue, set `provider.primary` to `openai`, `anthropic`, `ollama` or `custom` and fill in that provider's `api-key` (see [Provider setup](#provider-setup)), then `/aifriend reload`.
+- The removed name in `provider.failover` is skipped with a warning.
+- A top-level `api-key` that is still in your file is ignored (with a warning) and never copied anywhere. Delete it after you moved the key.
+- `config-version` becomes 5; a backup `config.yml.bak-v<old>` is saved first and none of your values is changed.
+
+The exact old names are in the [CHANGELOG](CHANGELOG.md).
+
 **From 2.1.0.** Drop the new jar in place of the old one. Your `config.yml` gets `config-version: 4` and the new sections (`server-context`, `mood`, `relationships`, `boredom`, `supervision`) with comments; a backup `config.yml.bak-v3` is saved first. The database schema is upgraded to v2 on the next start (one new table, added the next time the database is opened, which happens only when long-term memory or relationships are enabled; existing notes are untouched). Nothing changes until you enable something.
 
-**From 2.0.0.** Drop the new jar in place of the old one. Your `config.yml` gets `config-version: 3` and the new sections (`provider`, `personas`, `memory`, `limits`, `cost`, `reply-filter`, `mentions`, `opt-out`, `events`, `storage`, `long-term-memory`) with comments; a backup `config.yml.bak-v1` is saved first. Long-term memory and the database stay off/unused until you enable them. Nothing changes until you enable something: the proxy stays the primary provider, and all chat features are off. To use OpenAI or Claude directly, follow [Provider setup](#provider-setup).
+**From 2.0.0.** Drop the new jar in place of the old one. Your `config.yml` gets `config-version: 3` and the new sections (`provider`, `personas`, `memory`, `limits`, `cost`, `reply-filter`, `mentions`, `opt-out`, `events`, `storage`, `long-term-memory`) with comments; a backup `config.yml.bak-v1` is saved first. Long-term memory and the database stay off/unused until you enable them. Nothing changes until you enable something: all chat features are off. Then follow the 3.0.0 notes above.
 
 **From 1.x.** 2.0.0 was a rewrite. Drop the new jar in place of the old one; the folder `plugins/ai-friend/` is the same, so your settings are kept.
 
-- Old keys are migrated automatically on the first start (the old file is backed up as `config.yml.bak-v0`): `openai_api_key` -> `api-key`, `gpt_version` -> `model`, `chatbot_name` -> `chatbot-name`, `preffered_language` -> `language`, `timer_interval` -> `interval-seconds`, `player_dissinterest` -> `stop-when-ignored`; `enabled` and `personalization` keep their names.
+- Old keys are migrated automatically on the first start (the old file is backed up as `config.yml.bak-v0`): `chatbot_name` -> `chatbot-name`, `preffered_language` -> `language`, `timer_interval` -> `interval-seconds`, `player_dissinterest` -> `stop-when-ignored`; `enabled` and `personalization` keep their names. The 1.x `openai_api_key` and `gpt_version` are **not** migrated (they belonged to the removed relay): enter your key under `provider.providers.openai`.
 - **Paper is required now.** 1.x also ran on Spigot; 2.x does not. Stay on 1.4.1 if you run Spigot.
 - `/aifriend` now has subcommands; `/aifriendreload` still works. Commands need permissions instead of op status.
 
@@ -445,13 +448,11 @@ Direct OpenAI/Claude/Ollama/custom calls, the chat features above, long-term mem
 
 **`401 Unauthorized` in the log.** The key was rejected. Check for typos or whitespace, that the key is active and has credit, that it belongs to the provider you selected, and that you did not leave the default placeholder.
 
-**The trial stopped working.** The `trial` key is valid for 3 days. Use your own key afterwards, with the proxy or directly.
-
 **Does it work on Spigot or Bukkit?** No. Use 1.4.1 or move to Paper.
 
 **Does it work on Folia?** The code uses Folia-compatible schedulers; the plugin is declared Paper-based and has not been tested on a Folia server yet.
 
-**Can I use it without sending chat to your proxy?** Yes: set `provider.primary` to `openai`, `anthropic`, `ollama` or `custom`. Chat then goes only to that provider. With Ollama on the same machine nothing leaves your server.
+**Does chat go through the plugin author's server?** No. The plugin has no server of its own; chat goes only to the provider you configure. With Ollama on the same machine nothing leaves your server.
 
 **Which provider should I choose?** For the lowest cost and effort `openai` with `gpt-4o-mini` or `anthropic` with the small Claude model; for privacy a local `ollama` model (needs a capable machine); for choice of many models `custom` with OpenRouter.
 

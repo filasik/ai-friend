@@ -9,9 +9,9 @@ import java.util.Locale;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Turns the proxy's answer into a {@link Reply}. The proxy returns the model output as a JSON string; the model was
- * asked for {@code {"action":"say","text":"..."}}. Plain text is accepted too (older proxy behaviour, or a model that
- * ignored the format), and the exact legacy answer {@code STOP MESSAGING} still means sleep. Text is cleaned and cut.
+ * Turns the provider's answer text into a {@link Reply}. The model was asked for
+ * {@code {"action":"say","text":"..."}}. Plain text (or a JSON string) is accepted too, for a model that ignored the
+ * format, and the exact legacy answer {@code STOP MESSAGING} still means sleep. Text is cleaned and cut.
  */
 public final class ReplyParser {
 
@@ -20,7 +20,7 @@ public final class ReplyParser {
     private ReplyParser() {
     }
 
-    /** @throws IOException when the proxy reported an error instead of an answer */
+    /** @throws IOException when the answer is an error object instead of text instead of an answer */
     public static Reply parse(String body, String botName, int maxLength) throws IOException {
         String content = unwrap(body);
         if (content == null) return Reply.NONE;
@@ -59,7 +59,7 @@ public final class ReplyParser {
         return Reply.say(Text.cut(text, maxLength));
     }
 
-    /** The answer text inside the proxy's JSON string; the raw body when it is not JSON at all. */
+    /** The answer text inside a JSON string or object; the raw body when it is not JSON at all. */
     private static @Nullable String unwrap(String body) throws IOException {
         String trimmed = body.strip();
         if (trimmed.isEmpty()) return null;

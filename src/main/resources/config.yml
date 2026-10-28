@@ -7,7 +7,7 @@
 # Config format version. Do not change: when you update the plugin, options that are new in the
 # newer version are added to this file automatically (your values stay, a backup is saved first).
 # Options of AI Friend 1.x (openai_api_key, gpt_version, ...) are renamed automatically on the first start.
-config-version: 4
+config-version: 5
 
 # Language of the plugin's own messages (commands, status): en, cs.
 # The files plugins/ai-friend/messages_<locale>.yml are yours to edit; missing keys fall back to the built-in text.
@@ -30,15 +30,9 @@ metrics: true
 # Switch the chatbot on or off without removing the plugin.
 enabled: true
 
-# Your key. Without a key the bot stays silent (and nothing leaves your server).
-#   "trial"  = free 3-day trial key (limited, the model below is ignored)
-#   otherwise a key from https://platform.openai.com/signup
-# Chat lines, this key, the model and your server address are sent to the proxy https://gpt.netuj.eu,
-# which forwards them to OpenAI. Tell your players (see the Privacy section in the README).
-api-key: your_openai_api_key_here
-
-# Model to use: gpt-4o-mini, gpt-4o, ... (ignored with the "trial" key).
-model: gpt-4o-mini
+# The API key and the model are set per provider, see "provider" below. Without a key the bot stays silent
+# and nothing leaves your server. Chat lines (with player names) go to the provider you choose and to nobody else.
+# Tell your players (see the Privacy section in the README).
 
 # How the bot is named in chat ("<name>: message").
 chatbot-name: AI Friend
@@ -77,17 +71,15 @@ http:
 
 # --- Where the answers come from ---------------------------------------------
 
-# Where the answers come from. Everything here is optional: with the defaults the bot keeps using the
-# proxy (api-key and model above), exactly as before.
+# Where the answers come from. Set the api-key of the provider you pick below; without one the bot stays silent.
 provider:
-  # Which provider answers: proxy | openai | anthropic | ollama | custom (or a name you define below).
-  #   proxy      the gpt.netuj.eu proxy, uses api-key and model from the top of this file
+  # Which provider answers: openai | anthropic | ollama | custom (or a name you define below).
   #   openai     OpenAI directly (https://platform.openai.com), needs providers.openai.api-key
   #   anthropic  Claude directly (https://console.anthropic.com), needs providers.anthropic.api-key
   #   ollama     a local Ollama server, no key (https://ollama.com)
   #   custom     any OpenAI-compatible server (OpenRouter, LM Studio, vLLM, ...): needs base-url and model
-  # With a direct provider chat lines go straight to that company, not through the proxy.
-  primary: proxy
+  # Chat lines go straight to the provider you choose (a local Ollama server never leaves your machine).
+  primary: openai
 
   # Providers to try, in this order, when the primary fails (error, timeout, rate limit).
   # A failing provider is skipped for failover-cooldown-seconds so a dead one is not tried on every request.
@@ -105,7 +97,6 @@ provider:
   # Settings per provider. Only what you change needs to be listed. Keys are secrets: never share this file.
   # Every provider takes: model, base-url (has a sensible default), api-key, max-output-tokens (16-4000).
   providers:
-    # proxy has no options here (it uses api-key and model from the top of this file).
     openai:
       model: gpt-4o-mini
       api-key: your_openai_api_key_here
@@ -281,7 +272,7 @@ long-term-memory:
   # With embeddings they are matched by meaning, but every note and every request is also sent to the embedding service.
   embeddings:
     # none, or the name of an entry under provider.providers (openai, custom, ollama or your own).
-    # Anthropic and the proxy have no embeddings: use none, or another provider just for this.
+    # Anthropic has no embeddings: use none, or another provider just for this.
     backend: none
     # Embedding model. Empty = text-embedding-3-small (openai, custom) or nomic-embed-text (ollama).
     model: ""

@@ -5,4 +5,4 @@ Report it privately via GitHub "Report a vulnerability" (Security tab) or contac
 
 Only the latest release receives security fixes.
 
-Relevant areas: handling of the API key (stored in `config.yml`, masked in `/aifriend status`), player chat sent to the AI proxy (see the Privacy and data section of the README), and prompt injection through chat text.
+Relevant areas: handling of the API key (stored in `config.yml`, masked in `/aifriend status`), player chat sent to the AI provider you configure (see the Privacy and data section of the README), and prompt injection through chat text.

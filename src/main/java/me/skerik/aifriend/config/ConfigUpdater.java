@@ -10,6 +10,7 @@ import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import me.skerik.aifriend.ai.provider.ProviderSettings;
 import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -25,11 +26,10 @@ public final class ConfigUpdater {
     /**
      * Keys that were renamed in a later version (old path to new path). When an older config is updated the admin's
      * value moves to the new key. AI Friend 1.x used snake_case names; {@code enabled} and {@code personalization}
-     * kept theirs.
+     * kept theirs. The 1.x {@code openai_api_key} and {@code gpt_version} are deliberately not moved: they belonged to
+     * the removed proxy, see {@link #flagRetiredProxy}.
      */
     public static final Map<String, String> RENAMES = Map.of(
-            "openai_api_key", "api-key",
-            "gpt_version", "model",
             "chatbot_name", "chatbot-name",
             "preffered_language", "language",
             "timer_interval", "interval-seconds",
@@ -60,6 +60,7 @@ public final class ConfigUpdater {
         if (have >= defaults.getInt(VERSION_KEY, 1)) return 0;
         try {
             Files.copy(file, file.resolveSibling("config.yml.bak-v" + have), StandardCopyOption.REPLACE_EXISTING);
+            flagRetiredProxy(user);
             int added = merge(user, defaults) + migrate(user, RENAMES);
             user.save(file.toFile());
             plugin.getLogger().info("config.yml updated to version " + user.getInt(VERSION_KEY) + ": " + added
@@ -68,6 +69,22 @@ public final class ConfigUpdater {
         } catch (IOException e) {
             plugin.getLogger().warning("Cannot update config.yml: " + e.getMessage() + "; using built-in defaults for new options");
             return 0;
+        }
+    }
+
+    /**
+     * Versions before 3.0 sent chat through the author's proxy by default, so a config that has a top-level key
+     * ({@code api-key}, 1.x {@code openai_api_key}) but no {@code provider.primary} was a proxy config. The new default
+     * must not silently send that chat to a different company, so the retired name is written down: the plugin then
+     * stays inactive and logs what to do. Only done when the admin never chose a provider; a chosen one is left alone.
+     */
+    static void flagRetiredProxy(YamlConfiguration user) {
+        if (user.contains("provider.primary", true)) return;
+        for (String key : new String[] {"api-key", "openai_api_key"}) {
+            if (!ProviderSettings.isUnset(user.getString(key, ""))) {
+                user.set("provider.primary", "proxy");
+                return;
+            }
         }
     }
 

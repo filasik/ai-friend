@@ -730,8 +730,7 @@ public final class ChatBot {
         retryAt = now + wait * 1000;
         String why;
         if (e instanceof ApiException api && api.status() == 401) {
-            why = "HTTP 401, the api-key was rejected; check the key of the provider in config.yml"
-                    + (rt.settings.apiKey().equals("trial") ? " (the trial has probably expired)" : "");
+            why = "HTTP 401, the api-key was rejected; check the key of the provider in config.yml";
         } else {
             why = e.getClass().getSimpleName() + (e.getMessage() == null ? "" : ": " + e.getMessage());
         }

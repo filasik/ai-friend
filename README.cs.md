@@ -17,26 +17,25 @@
 
 ---
 
-> **Soukromí na prvním místě.** Když je bot aktivní, poslední řádky chatu (se jmény hráčů) se odesílají vámi zvolené AI službě. Před zapnutím na veřejném serveru si přečtěte [Soukromí a data](#soukromí-a-data).
+> **Soukromí na prvním místě.** Řádky chatu včetně jmen hráčů se odesílají jen AI poskytovateli, kterého si sami zvolíte (OpenAI, Anthropic, vaše Ollama nebo jiný server kompatibilní s OpenAI). Nic neprochází přes autora pluginu a plugin nemá žádný vlastní server. Před zapnutím na veřejném serveru si přečtěte [Soukromí a data](#soukromí-a-data).
 
 ## Hlavní vlastnosti
 
 - **Společník v chatu.** Sbírá, co hráči píšou, a v každém intervalu odpoví jednou krátkou zprávou ve tvaru `<chatbot-name>: <odpověď>`.
-- **Vaše volba AI.** Původní proxy (výchozí, beze změny), OpenAI, Anthropic Claude, lokální server Ollama nebo libovolný endpoint kompatibilní s OpenAI, s řetězem záložních poskytovatelů a volitelnou cache odpovědí.
+- **Vaše volba AI.** OpenAI (výchozí), Anthropic Claude, lokální server Ollama nebo libovolný endpoint kompatibilní s OpenAI, s řetězem záložních poskytovatelů a volitelnou cache odpovědí.
 - **Chytrý chat, vše volitelné a ve výchozím stavu vypnuté.** Persony, paměť konverzace, limity, odhad nákladů, filtr odpovědí, přímé dotazy (`/ai`, `@Jméno`), vypnutí bota pro jednotlivého hráče a reakce na události ve hře.
 - **Dlouhodobá paměť** (volitelná, vypnutá). Bot si pamatuje, co mu hráči o sobě řekli, v SQLite nebo MariaDB; hráči své poznámky vidí a mažou.
 - **Integrace.** Veřejné API (`AiFriendResponseEvent`, `AiFriendApi`) a placeholdery PlaceholderAPI, např. `%aifriend_mood%`.
 - **Podle vás.** Jméno bota, jazyk odpovědí a volný text `personalization` (web, vtipy, pravidla serveru, ...).
 - **Ví, kdy mlčet.** Pokud hráče bot zjevně štve, usne na `sleep-minutes`. Jediný hráč ho nemůže umlčet pro všechny.
 - **Neblokuje server.** Síťová volání jsou asynchronní s timeouty, při chybách se prodlužuje pauza (exponenciálně) a každá chyba skončí jedním jasným řádkem v logu.
-- **Zkušební klíč.** Speciální klíč `trial` (poskytovatel proxy) funguje 3 dny, bez účtu.
 - **Nízká údržba.** Okomentovaný `config.yml`, který se nikdy nepřepisuje a při aktualizaci dostane nové volby, upravitelné zprávy (angličtina a čeština), upozornění na novou verzi z GitHubu.
 - **Kód kompatibilní s Folií.** Žádný `BukkitScheduler`, vše běží přes region/global/async schedulery.
 
 ## Rychlý start
 
-1. Dejte `ai-friend-2.1.0.jar` do `plugins/` a spusťte server.
-2. V `plugins/ai-friend/config.yml` nastavte `api-key: "trial"` (3 dny zdarma, přes proxy) nebo vyberte poskytovatele, viz [Nastavení poskytovatele](#nastavení-poskytovatele).
+1. Dejte `ai-friend-3.0.0.jar` do `plugins/` a spusťte server.
+2. V `plugins/ai-friend/config.yml` vyberte poskytovatele a jeho API klíč zadejte do `provider.providers.<název>.api-key`, viz [Nastavení poskytovatele](#nastavení-poskytovatele).
 3. Spusťte `/aifriend reload` a pak `/aifriend status`, abyste ověřili, že bot běží.
 
 > Výchozí zástupné hodnoty (`your_openai_api_key_here`, `your_anthropic_api_key_here`) znamenají "nenastaveno": bot mlčí a nic se nikam neodesílá.
@@ -47,8 +46,8 @@
 |---|---|
 | Server | Paper **26.3** nebo novější (**jen Paper**; Spigot a čisté Bukkit se od 2.0.0 nepodporují) |
 | Java | **25** |
-| Síť | Odchozí HTTPS k poskytovateli, kterého používáte: `gpt.netuj.eu` (proxy), `api.openai.com`, `api.anthropic.com`, váš vlastní endpoint, nebo nic mimo vaši síť u lokální Ollamy. Plus `api.github.com` pro kontrolu aktualizací |
-| Klíč | `trial`, OpenAI klíč, Anthropic klíč, nebo žádný u Ollamy / lokálních serverů bez klíče |
+| Síť | Odchozí HTTPS k poskytovateli, kterého používáte: `api.openai.com`, `api.anthropic.com`, váš vlastní endpoint, nebo nic mimo vaši síť u lokální Ollamy. Plus `api.github.com` pro kontrolu aktualizací |
+| Klíč | OpenAI klíč, Anthropic klíč, nebo žádný u Ollamy / lokálních serverů bez klíče |
 
 Starý jar 1.x (kompatibilní se Spigotem) zůstává ke stažení v [GitHub releases](https://github.com/filasik/ai-friend/releases).
 
@@ -79,8 +78,7 @@ Nastavte `provider.primary` a vyplňte daného poskytovatele v `provider.provide
 
 | Poskytovatel | `provider.primary` | Potřebuje | Chat jde na |
 |---|---|---|---|
-| Proxy (výchozí) | `proxy` | `api-key` (`trial` nebo OpenAI klíč) a `model` na nejvyšší úrovni | `gpt.netuj.eu`, odtud na OpenAI |
-| OpenAI | `openai` | `providers.openai.api-key` | `api.openai.com` |
+| OpenAI (výchozí) | `openai` | `providers.openai.api-key` | `api.openai.com` |
 | Anthropic Claude | `anthropic` | `providers.anthropic.api-key` | `api.anthropic.com` |
 | Ollama | `ollama` | běžící Ollamu, bez klíče | váš server Ollama (výchozí `localhost`) |
 | Vlastní (kompatibilní s OpenAI) | `custom` | `base-url` a `model`, klíč pokud ho server chce | `base-url`, který nastavíte |
@@ -178,7 +176,7 @@ Volitelná a ve výchozím stavu **vypnutá** (`long-term-memory.enabled`). Bot 
 2. Poznámky se ukládají podle UUID hráče do [databáze](#databáze) (`storage`), nejvýše `max-notes-per-player` na hráče (nejdéle nepoužité se zahazují) a s `retention-days` ne déle než tolik dní bez použití. Úklid běží jednou denně.
 3. Ke každé odpovědi se do požadavku přidá `retrieval-top-k` nejvhodnějších poznámek o hráčích z aktuálního chatu jako řádky `{"note":"...","about":"Jméno"}` v bloku **dat**. Poznámky vycházejí z textu hráčů, takže jsou stejně nedůvěryhodná data jako řádky chatu a nikdy nejsou součástí systémových pravidel. Získávání poznámek nikdy nezdržuje odpověď: běží potom na vlastním úkolu a přeskočí se, když je bot omezený limity, spí nebo čeká po chybě.
 
-**Které poznámky se hodí?** S `embeddings.backend: none` (výchozí) se poznámky hledají podle společných slov, což je zdarma a funguje s každým poskytovatelem. Nastavte `embeddings.backend` na název položky v `provider.providers` (`openai`, `custom` pro libovolný server kompatibilní s OpenAI, nebo `ollama`) a poznámky se budou hledat podle významu; výchozí modely jsou `text-embedding-3-small` (kompatibilní s OpenAI) a `nomic-embed-text` (Ollama), přepsat je lze v `embeddings.model` a `embeddings.base-url`. Anthropic ani proxy embeddingy nemají, takže použijí slova. Když embedding služba selže, na minutu se použijí slova. Každá poznámka a text každého požadavku se tedy posílá i embedding službě.
+**Které poznámky se hodí?** S `embeddings.backend: none` (výchozí) se poznámky hledají podle společných slov, což je zdarma a funguje s každým poskytovatelem. Nastavte `embeddings.backend` na název položky v `provider.providers` (`openai`, `custom` pro libovolný server kompatibilní s OpenAI, nebo `ollama`) a poznámky se budou hledat podle významu; výchozí modely jsou `text-embedding-3-small` (kompatibilní s OpenAI) a `nomic-embed-text` (Ollama), přepsat je lze v `embeddings.model` a `embeddings.base-url`. Anthropic embeddingy nemá, takže použijí slova. Když embedding služba selže, na minutu se použijí slova. Každá poznámka a text každého požadavku se tedy posílá i embedding službě.
 
 **Soukromí.** Viz [Soukromí a data](#soukromí-a-data). Hráči své poznámky ovládají:
 
@@ -287,8 +285,6 @@ AiFriendApi api = Bukkit.getServicesManager().load(AiFriendApi.class); // null, 
 | `metrics` | `true` | Anonymní statistiky bStats |
 | `command.aliases` | `[]` | Další aliasy pro `/aifriend` (nutný restart) |
 | `enabled` | `true` | Zapne nebo vypne bota |
-| `api-key` | `your_openai_api_key_here` | Poskytovatel proxy: `trial` pro 3denní zkušební klíč, nebo váš OpenAI klíč. Výchozí hodnota znamená "nenastaveno" |
-| `model` | `gpt-4o-mini` | Poskytovatel proxy: název modelu. U klíče `trial` se ignoruje |
 | `chatbot-name` | `AI Friend` | Jméno před odpověďmi |
 | `language` | `English` | Jazyk odpovědí bota (volný text, např. `Czech`) |
 | `personalization` | prázdné | Volné instrukce pro bota: web, vtipy, tón |
@@ -299,7 +295,7 @@ AiFriendApi api = Bukkit.getServicesManager().load(AiFriendApi.class); // null, 
 | `max-reply-length` | `256` | Delší odpovědi se zkrátí (20-1000) |
 | `http.connect-timeout-seconds` | `10` | Timeout navázání spojení (1-120) |
 | `http.read-timeout-seconds` | `30` | Timeout čtení (1-120) |
-| `provider.primary` | `proxy` | `proxy`, `openai`, `anthropic`, `ollama`, `custom` nebo vámi definovaný název |
+| `provider.primary` | `openai` | `openai`, `anthropic`, `ollama`, `custom` nebo vámi definovaný název |
 | `provider.failover` | `[]` | Poskytovatelé k vyzkoušení v pořadí, když primární selže |
 | `provider.failover-cooldown-seconds` | `60` | Jak dlouho se selhávající poskytovatel přeskakuje |
 | `provider.cache.enabled` | `false` | Pamatovat si odpovědi na shodné požadavky |
@@ -376,7 +372,6 @@ Příklad:
 
 ```yaml
 enabled: true
-api-key: "trial"
 chatbot-name: "Buddy"
 language: "Czech"
 personalization: "Jsi přátelský pomocník serveru example.com. Novým hráčům zmiň /spawn."
@@ -397,9 +392,8 @@ Co opustí váš server, závisí na `provider.primary` (a `provider.failover`).
 
 | Poskytovatel | Co se posílá a kam |
 |---|---|
-| `proxy` | HTTPS na `https://gpt.netuj.eu/api/ai_friend.php`, **provozuje autor pluginu**, který požadavek přepošle OpenAI. Navíc: váš `api-key` (`trial` nebo OpenAI klíč), název `model` a adresa vašeho serveru, jak ji vidí proxy (IP adresa, ze které se připojujete) |
-| `openai` | HTTPS přímo na `api.openai.com` (nebo váš `base-url`), klíč v hlavičce `Authorization`. Žádná proxy. Platí podmínky OpenAI |
-| `anthropic` | HTTPS přímo na `api.anthropic.com`, klíč v hlavičce `x-api-key`. Žádná proxy. Platí podmínky Anthropic |
+| `openai` | HTTPS přímo na `api.openai.com` (nebo váš `base-url`), klíč v hlavičce `Authorization`. Nikdo mezi tím. Platí podmínky OpenAI |
+| `anthropic` | HTTPS přímo na `api.anthropic.com`, klíč v hlavičce `x-api-key`. Nikdo mezi tím. Platí podmínky Anthropic |
 | `ollama` | Jen na váš server Ollama (výchozí `localhost`). Pokud Ollama běží u vás, nic neopouští váš stroj; pokud `base-url` ukážete jinam, chat jde tam |
 | `custom` | Na `base-url`, který jste nastavili (OpenRouter, váš server, ...). Provozovatel endpointu chat vidí |
 
@@ -407,7 +401,7 @@ Upozornění:
 
 - **Chat vašich hráčů se posílá třetí straně**, pokud nepoužíváte lokální Ollamu nebo vlastní server. Provozujete-li veřejný server, uveďte to v pravidlech nebo zásadách ochrany soukromí a v oznámeních, která vyžaduje vaše jurisdikce.
 - S řetězem záložních poskytovatelů jde chat tomu, kdo nakonec odpoví; každý člen řetězu je potenciální příjemce.
-- API klíče jsou jen v `config.yml`, v čistém textu jako každé nastavení pluginu. Soubor držte v soukromí. Klíče jsou maskované v `/aifriend status` a odstraněné z chybových hlášek i logu; posílají se jen v hlavičkách požadavku (u proxy v těle požadavku). Přesměrování se nesledují.
+- API klíče jsou jen v `config.yml`, v čistém textu jako každé nastavení pluginu. Soubor držte v soukromí. Klíče jsou maskované v `/aifriend status` a odstraněné z chybových hlášek i logu; posílají se jen v hlavičkách požadavku svému poskytovateli. Přesměrování se nesledují.
 - Umlčení hráči (`opt-out`) se nikdy neukládají ani neposílají. Seznam (`muted-players.yml`) obsahuje UUID hráčů na vašem serveru.
 - **Vnímání světa** (vše ve výchozím stavu vypnuté). *Kontext serveru* posílá s každým požadavkem denní dobu, počasí, počet hráčů online a u hráčů, kteří psali, jejich svět, biom a nepřátelské moby poblíž (nikdy souřadnice) vašemu AI poskytovateli. *Vztahy* ukládají ve vaší databázi UUID hráče, poslední jméno, počet zodpovězených výměn, první a poslední čas a volitelnou přezdívku, kterou hráč napsal; `/aifriend forget` je smaže, ztlumení bota je smaže a zastaví sběr, a přezdívka s úrovní jdou poskytovateli spolu s řádky chatu daného hráče. *Nálada* a *nuda* drží v paměti jen počítadla. *Dohled nad chatem* čte veřejné řádky jen v paměti (nevolá AI, nic neukládá a hráče, kteří bota ztlumili, nesleduje).
 - Paměť konverzace, limity, součty nákladů a cache jsou jen v paměti a s restartem zmizí (výjimkou je dlouhodobá paměť, viz níže).
@@ -416,13 +410,22 @@ Upozornění:
 
 ## Aktualizace
 
+**Z 2.x na 3.0.0 (zásadní změna).** Poskytovatel, který 2.x používala jako výchozí (zprostředkovatel provozovaný autorem pluginu), a jeho bezplatný 3denní klíč jsou pryč, stejně jako volby `api-key` a `model` na nejvyšší úrovni: klíče a modely jsou nyní v `provider.providers.<název>`. Plugin nikdy sám nepřepne váš chat k jiné firmě:
+
+- Pokud `config.yml` v `provider.primary` stále vybírá odstraněného poskytovatele, nebo má `api-key` na nejvyšší úrovni a poskytovatele nikdy nevybral, bot zůstane **neaktivní a nic neodesílá**; log to řekne jedním řádkem. Pokračujte nastavením `provider.primary` na `openai`, `anthropic`, `ollama` nebo `custom`, doplněním `api-key` toho poskytovatele (viz [Nastavení poskytovatele](#nastavení-poskytovatele)) a `/aifriend reload`.
+- Odstraněný název v `provider.failover` se přeskočí s varováním.
+- `api-key` na nejvyšší úrovni, který v souboru zůstal, se ignoruje (s varováním) a nikam se nekopíruje. Po přesunu klíče ho smažte.
+- `config-version` se změní na 5; nejdřív se uloží záloha `config.yml.bak-v<stará>` a žádná vaše hodnota se nezmění.
+
+Přesné staré názvy jsou v [CHANGELOGu](CHANGELOG.md).
+
 **Z 2.1.0.** Vyměňte jar. Do `config.yml` se doplní `config-version: 4` a nové sekce (`server-context`, `mood`, `relationships`, `boredom`, `supervision`) s komentáři; nejdřív se uloží záloha `config.yml.bak-v3`. Schéma databáze se při dalším startu povýší na v2 (jedna nová tabulka, přidá se při příštím otevření databáze, což se děje jen se zapnutou dlouhodobou pamětí nebo vztahy; stávající poznámky zůstanou). Nic se nezmění, dokud něco nezapnete.
 
-**Z 2.0.0.** Vyměňte jar. Do `config.yml` se doplní `config-version: 3` a nové sekce (`provider`, `personas`, `memory`, `limits`, `cost`, `reply-filter`, `mentions`, `opt-out`, `events`, `storage`, `long-term-memory`) s komentáři; nejdřív se uloží záloha `config.yml.bak-v1`. Nic se nezmění, dokud něco nezapnete: proxy zůstává primárním poskytovatelem a všechny funkce chatu jsou vypnuté. Pro přímé použití OpenAI nebo Claude viz [Nastavení poskytovatele](#nastavení-poskytovatele).
+**Z 2.0.0.** Vyměňte jar. Do `config.yml` se doplní `config-version: 3` a nové sekce (`provider`, `personas`, `memory`, `limits`, `cost`, `reply-filter`, `mentions`, `opt-out`, `events`, `storage`, `long-term-memory`) s komentáři; nejdřív se uloží záloha `config.yml.bak-v1`. Nic se nezmění, dokud něco nezapnete: všechny funkce chatu jsou vypnuté. Pak postupujte podle poznámek k 3.0.0 výše.
 
 **Z 1.x.** Verze 2.0.0 byla přepis. Vyměňte jar; složka `plugins/ai-friend/` je stejná, takže nastavení zůstane.
 
-- Staré klíče se při prvním startu převedou automaticky (stará konfigurace se zálohuje jako `config.yml.bak-v0`): `openai_api_key` -> `api-key`, `gpt_version` -> `model`, `chatbot_name` -> `chatbot-name`, `preffered_language` -> `language`, `timer_interval` -> `interval-seconds`, `player_dissinterest` -> `stop-when-ignored`; `enabled` a `personalization` si názvy ponechaly.
+- Staré klíče se při prvním startu převedou automaticky (stará konfigurace se zálohuje jako `config.yml.bak-v0`): `chatbot_name` -> `chatbot-name`, `preffered_language` -> `language`, `timer_interval` -> `interval-seconds`, `player_dissinterest` -> `stop-when-ignored`; `enabled` a `personalization` si názvy ponechaly. Klíče z 1.x `openai_api_key` a `gpt_version` se **nepřevádějí** (patřily odstraněnému zprostředkovateli): klíč zadejte do `provider.providers.openai`.
 - **Nyní je nutný Paper.** 1.x běžela i na Spigotu, 2.x ne. Na Spigotu zůstaňte u 1.4.1.
 - `/aifriend` má podpříkazy; `/aifriendreload` stále funguje. Příkazy vyžadují oprávnění místo statusu operátora.
 
@@ -444,13 +447,11 @@ Přímá volání OpenAI/Claude/Ollamy/vlastního endpointu, výše popsané fun
 
 **V logu je `401 Unauthorized`.** Klíč byl odmítnut. Zkontrolujte překlepy a mezery, že je klíč aktivní a má kredit, že patří vybranému poskytovateli a že jste nenechali výchozí zástupnou hodnotu.
 
-**Zkušební klíč přestal fungovat.** Klíč `trial` platí 3 dny. Poté použijte vlastní klíč, přes proxy nebo přímo.
-
 **Funguje to na Spigotu nebo Bukkitu?** Ne. Použijte 1.4.1 nebo přejděte na Paper.
 
 **Funguje to na Folii?** Kód používá schedulery kompatibilní s Folií; plugin je deklarován jako Paper a na Folii zatím nebyl testován.
 
-**Dá se to používat bez posílání chatu na vaši proxy?** Ano: nastavte `provider.primary` na `openai`, `anthropic`, `ollama` nebo `custom`. Chat pak jde jen tomuto poskytovateli. S Ollamou na stejném stroji nic neopustí váš server.
+**Jde chat přes server autora pluginu?** Ne. Plugin nemá žádný vlastní server; chat jde jen poskytovateli, kterého nastavíte. S Ollamou na stejném stroji nic neopustí váš server.
 
 **Kterého poskytovatele zvolit?** Pro nejnižší náklady a nejmenší práci `openai` s `gpt-4o-mini` nebo `anthropic` s malým modelem Claude; pro soukromí lokální `ollama` (chce výkonný stroj); pro výběr z mnoha modelů `custom` s OpenRouter.
 
