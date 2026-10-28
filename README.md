@@ -51,7 +51,7 @@ The old 1.x jar (Spigot-compatible) is still available on the [GitHub releases](
 
 ## Installation
 
-1. Download the jar from [Modrinth](https://modrinth.com/plugin/ai-friend) or [GitHub Releases](https://github.com/filasik/ai-friend/releases).
+1. Download the jar from [Modrinth](https://modrinth.com/plugin/aifriend), [Hangar](https://hangar.papermc.io/filasik/AIFriend-Personal_Assistant) or [GitHub Releases](https://github.com/filasik/ai-friend/releases).
 2. Put it into the `plugins/` folder of a Paper server and start the server.
 3. Edit `plugins/ai-friend/config.yml` (see [Configuration](#configuration)) and run `/aifriend reload`.
 

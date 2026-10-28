@@ -11,7 +11,11 @@ echo ">> build"
 ./gradlew build -x test || { echo "FAIL: build"; exit 1; }
 
 echo ">> start Paper (max 5 min)"
-echo stop | timeout 300 ./gradlew runServer --console=plain > smoke-output.txt 2>&1
+# `stop` must wait until the server is up ("Done ("), otherwise Paper fails on it with a NullPointerException.
+# `timeout` does not exist on macOS, perl is the fallback.
+limit() { if command -v timeout >/dev/null; then timeout "$@"; else local t=$1; shift; perl -e 'alarm shift; exec @ARGV' "$t" "$@"; fi; }
+( for _ in $(seq 1 140); do sleep 2; grep -qs "Done (" "$LOG" && break; done; sleep 3; echo stop ) \
+  | limit 300 ./gradlew runServer --console=plain > smoke-output.txt 2>&1
 CODE=$?
 
 [ -f "$LOG" ] || { echo "FAIL: chybí $LOG (server nenastartoval)"; tail -30 smoke-output.txt; exit 1; }
@@ -22,6 +26,6 @@ if grep -E "Could not load|Error occurred while enabling|Exception" "$LOG" | gre
   echo "FAIL: v logu jsou chyby:"; grep -E "Could not load|Error occurred while enabling|Exception" "$LOG" | head -20; FAILED=1
 fi
 grep -q "Done (" "$LOG" || { echo "FAIL: server nedoběhl do 'Done'"; FAILED=1; }
-[ $CODE -eq 124 ] && { echo "FAIL: timeout (server se nevypnul)"; FAILED=1; }
+[ $CODE -eq 124 ] || [ $CODE -eq 142 ] && { echo "FAIL: timeout (server se nevypnul)"; FAILED=1; }
 
 [ $FAILED -eq 0 ] && echo "OK: smoke test prošel" || { tail -40 "$LOG"; exit 1; }

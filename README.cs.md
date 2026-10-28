@@ -50,7 +50,7 @@ Starý jar 1.x (kompatibilní se Spigotem) zůstává ke stažení v [GitHub rel
 
 ## Instalace
 
-1. Stáhněte jar z [Modrinthu](https://modrinth.com/plugin/ai-friend) nebo [GitHub Releases](https://github.com/filasik/ai-friend/releases).
+1. Stáhněte jar z [Modrinthu](https://modrinth.com/plugin/aifriend) nebo [GitHub Releases](https://github.com/filasik/ai-friend/releases).
 2. Vložte ho do složky `plugins/` serveru Paper a spusťte server.
 3. Upravte `plugins/ai-friend/config.yml` (viz [Konfigurace](#konfigurace)) a spusťte `/aifriend reload`.
 

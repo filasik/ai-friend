@@ -28,3 +28,20 @@ jobs:
         env:
           MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
         run: ./gradlew modrinth
+      - name: Hangar
+        if: ${{ !cancelled() }}
+        env:
+          HANGAR_API_KEY: ${{ secrets.HANGAR_API_KEY }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          VERSION="${TAG#v}"
+          SLUG=$(sed -n 's/^hangarSlug=//p' gradle.properties)
+          GAME=$(sed -n 's/^minecraftVersion=//p' gradle.properties)
+          awk -v v="$VERSION" '$0=="## "v{f=1;next} /^## /{f=0} f' CHANGELOG.md > notes.md
+          JAR=$(ls build/libs/*.jar | head -n1)
+          JWT=$(curl --fail-with-body -sS -X POST "https://hangar.papermc.io/api/v1/authenticate?apiKey=$HANGAR_API_KEY" | jq -r .token)
+          jq -n --arg v "$VERSION" --arg g "$GAME" --rawfile c notes.md \
+            '{version:$v, channel:"Release", description:$c, files:[{platforms:["PAPER"]}], platformDependencies:{PAPER:[$g]}, pluginDependencies:{}}' > hangar.json
+          curl --fail-with-body -sS -X POST "https://hangar.papermc.io/api/v1/projects/$SLUG/upload" \
+            -H "Authorization: HangarAuth $JWT" \
+            -F "versionUpload=<hangar.json;type=application/json" -F "files=@$JAR"
