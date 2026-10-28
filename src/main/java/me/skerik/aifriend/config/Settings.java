@@ -16,10 +16,22 @@ import org.bukkit.configuration.file.FileConfiguration;
 public record Settings(
         String locale, boolean updateCheck, boolean metrics, List<String> aliases,
         boolean enabled, String chatbotName, String language, String personalization,
-        int intervalSeconds, boolean stopWhenIgnored, int sleepMinutes,
+        int intervalSeconds, boolean stopWhenIgnored, int sleepMinutes, Chattiness chattiness,
         int maxQueuedMessages, int maxReplyLength, int connectTimeoutSeconds, int readTimeoutSeconds,
         ProviderSettings provider, ChatFeatures features, Storage storage
 ) {
+
+    /** How eagerly the bot joins in when players talk among themselves (option {@code chattiness}). */
+    public enum Chattiness {
+        LOW, NORMAL, HIGH;
+
+        static Chattiness parse(String raw, Logger log) {
+            String v = raw == null ? "" : raw.strip().toLowerCase(Locale.ROOT);
+            for (Chattiness c : values()) if (c.name().toLowerCase(Locale.ROOT).equals(v)) return c;
+            log.warning("chattiness must be low, normal or high; using normal");
+            return NORMAL;
+        }
+    }
 
     /** The shared {@code storage:} section (used by every feature that keeps data in a database). */
     public record Storage(String type, String sqliteFile, int sqlitePool, String host, int port, String database,
@@ -67,6 +79,7 @@ public record Settings(
                 bounded(c, "interval-seconds", 5, 3600, 60, log),
                 c.getBoolean("stop-when-ignored", true),
                 bounded(c, "sleep-minutes", 1, 1440, 30, log),
+                Chattiness.parse(c.getString("chattiness", "normal"), log),
                 bounded(c, "max-queued-messages", 5, 500, 50, log),
                 bounded(c, "max-reply-length", 20, 1000, 256, log),
                 bounded(c, "http.connect-timeout-seconds", 1, 120, 10, log),

@@ -311,6 +311,7 @@ AiFriendApi api = Bukkit.getServicesManager().load(AiFriendApi.class); // null u
 | `interval-seconds` | `60` | How often the batch is sent. Allowed range 5 to 3600 |
 | `stop-when-ignored` | `true` | Let the bot go to sleep when players seem annoyed |
 | `sleep-minutes` | `30` | How long the bot sleeps |
+| `chattiness` | `normal` | `low` (answers almost only when spoken to), `normal`, `high` (also joins conversations between players with a short remark) |
 | `max-queued-messages` | `50` | Upper bound of the chat queue (5-500) |
 | `max-reply-length` | `256` | Longer replies are shortened (20-1000) |
 | `http.connect-timeout-seconds` | `10` | HTTP connect timeout (1-120) |

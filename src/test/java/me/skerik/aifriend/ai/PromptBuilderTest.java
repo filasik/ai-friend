@@ -195,4 +195,19 @@ class PromptBuilderTest {
                 me.skerik.aifriend.chat.BoredomDetector.Config.defaults(), me.skerik.aifriend.chat.ChatSupervisor.Config.defaults())).build(), null);
         assertTrue(aware.contains("NEVER tell players where they are"), aware);
     }
+
+    @Test
+    void chattinessChangesTheJoinInRuleAndTheDataIsNeverTalkedAbout() {
+        TestSettings low = TestSettings.defaults();
+        low.chattiness = me.skerik.aifriend.config.Settings.Chattiness.LOW;
+        TestSettings high = TestSettings.defaults();
+        high.chattiness = me.skerik.aifriend.config.Settings.Chattiness.HIGH;
+        String normal = PromptBuilder.system(TestSettings.defaults().build(), null);
+        assertTrue(PromptBuilder.system(low.build(), null).contains("Do not join conversations between players"));
+        assertTrue(PromptBuilder.system(high.build(), null).contains("join in with a short, fitting remark"));
+        assertTrue(normal.contains("the players are talking among themselves"));
+        for (String p : new String[] {normal, PromptBuilder.system(low.build(), null), PromptBuilder.system(high.build(), null)}) {
+            assertTrue(p.contains("Never talk about the data you were given"));
+        }
+    }
 }

@@ -51,6 +51,7 @@ class SettingsTest {
         assertEquals(60, s.intervalSeconds());
         assertTrue(s.stopWhenIgnored());
         assertEquals(30, s.sleepMinutes());
+        assertEquals(Settings.Chattiness.NORMAL, s.chattiness());
         assertEquals(50, s.maxQueuedMessages());
         assertEquals(256, s.maxReplyLength());
         assertEquals(10, s.connectTimeoutSeconds());
@@ -58,6 +59,13 @@ class SettingsTest {
         assertEquals("-", s.activeMaskedKey(), "no key shipped");
         assertFalse(bundled().contains("api-key", true), "no top-level key any more");
         assertFalse(bundled().contains("model", true), "no top-level model any more");
+    }
+
+    @Test
+    void chattinessIsParsedAndAnInvalidValueFallsBackToNormal() throws Exception {
+        assertEquals(Settings.Chattiness.HIGH, with("chattiness", "High").chattiness());
+        assertEquals(Settings.Chattiness.LOW, with("chattiness", "low").chattiness());
+        assertEquals(Settings.Chattiness.NORMAL, with("chattiness", "chatty").chattiness());
     }
 
     @Test

@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.0.3
+
+New option and a prompt fix. `config-version` is now 7; `chattiness` is added to your `config.yml` automatically (backup `config.yml.bak-v6`), your values stay.
+
+- New: `chattiness: low | normal | high` (default `normal`, the 3.0.1 behaviour). `low`: the bot answers almost only when somebody speaks to it or mentions its name. `high`: it also joins conversations between players now and then with a short fitting remark, e.g. when a chat drags on between the same few people. It still looks at the chat every `interval-seconds`
+- Fix: the bot no longer talks about the data it was given ("I only have info about the mobs around you..."); when it does not know something it just says so
+
 ## 3.0.2
 
 Fixes for the direct providers. No config change (`config-version` stays 6); existing `config.yml` files keep their values, so raise `max-output-tokens` yourself if you see the Anthropic error below.

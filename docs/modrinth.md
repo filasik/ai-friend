@@ -51,7 +51,7 @@ A friendly AI companion for your Minecraft chat. It reads the public chat and po
 `aifriend.bypass-limits` (op) exempts a player from the cooldown and daily limits, `aifriend.bypass-supervision` (op) from the friendly chat hints.
 
 ## Configuration
-Key options in `config.yml` (all commented): `provider.*` (primary, failover, cache and per-provider settings), `personas`, `memory`, `limits`, `cost`, `reply-filter`, `mentions`, `opt-out`, `events`, `storage` (SQLite or MariaDB), `long-term-memory`, `server-context`, `mood`, `relationships`, `boredom`, `supervision`, `knowledge`, `enabled`, `chatbot-name`, `language`, `personalization`, `interval-seconds` (5-3600), `stop-when-ignored`, `sleep-minutes`, `max-queued-messages`, `max-reply-length`, `http.*` timeouts, `locale` (`en`/`cs`), `update-check`, `metrics`. Full reference in the [README](https://github.com/filasik/ai-friend#configuration).
+Key options in `config.yml` (all commented): `provider.*` (primary, failover, cache and per-provider settings), `personas`, `memory`, `limits`, `cost`, `reply-filter`, `mentions`, `opt-out`, `events`, `storage` (SQLite or MariaDB), `long-term-memory`, `server-context`, `mood`, `relationships`, `boredom`, `supervision`, `knowledge`, `enabled`, `chatbot-name`, `language`, `personalization`, `interval-seconds` (5-3600), `stop-when-ignored`, `sleep-minutes`, `chattiness` (`low`/`normal`/`high`), `max-queued-messages`, `max-reply-length`, `http.*` timeouts, `locale` (`en`/`cs`), `update-check`, `metrics`. Full reference in the [README](https://github.com/filasik/ai-friend#configuration).
 
 ## Privacy / data
 

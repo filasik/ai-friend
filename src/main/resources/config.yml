@@ -7,7 +7,7 @@
 # Config format version. Do not change: when you update the plugin, options that are new in the
 # newer version are added to this file automatically (your values stay, a backup is saved first).
 # Options of AI Friend 1.x (openai_api_key, gpt_version, ...) are renamed automatically on the first start.
-config-version: 6
+config-version: 7
 
 # Language of the plugin's own messages (commands, status): en, cs.
 # The files plugins/ai-friend/messages_<locale>.yml are yours to edit; missing keys fall back to the built-in text.
@@ -43,6 +43,13 @@ language: English
 # Anything the bot should know or do, e.g. "Our website is https://example.com and sometimes tell a joke."
 # May stay empty.
 personalization: ""
+
+# How eagerly the bot joins in when players talk among themselves: low | normal | high.
+#   low     answers almost only when somebody speaks to it or mentions its name
+#   normal  joins in now and then, but stays out of conversations between players
+#   high    also joins conversations between players with a short fitting remark, e.g. when a chat drags on
+# It still only looks at the chat every interval-seconds, so a shorter interval gives it more chances to join in.
+chattiness: normal
 
 # How often (seconds, 5-3600) the bot looks at the chat and answers. Nothing is sent when nobody wrote anything.
 interval-seconds: 60

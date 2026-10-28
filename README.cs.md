@@ -310,6 +310,7 @@ AiFriendApi api = Bukkit.getServicesManager().load(AiFriendApi.class); // null, 
 | `interval-seconds` | `60` | Jak často se dávka odesílá. Rozsah 5 až 3600 |
 | `stop-when-ignored` | `true` | Nechat bota usnout, když hráče štve |
 | `sleep-minutes` | `30` | Jak dlouho bot spí |
+| `chattiness` | `normal` | `low` (odpovídá skoro jen na oslovení), `normal`, `high` (zapojuje se i do rozhovorů hráčů krátkou poznámkou) |
 | `max-queued-messages` | `50` | Horní mez fronty chatu (5-500) |
 | `max-reply-length` | `256` | Delší odpovědi se zkrátí (20-1000) |
 | `http.connect-timeout-seconds` | `10` | Timeout navázání spojení (1-120) |

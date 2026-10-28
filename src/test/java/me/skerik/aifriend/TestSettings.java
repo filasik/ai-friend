@@ -27,6 +27,7 @@ public final class TestSettings {
     public int intervalSeconds = 60;
     public boolean stopWhenIgnored = true;
     public int sleepMinutes = 30;
+    public Settings.Chattiness chattiness = Settings.Chattiness.NORMAL;
     public int maxQueuedMessages = 50;
     public int maxReplyLength = 256;
     public ProviderSettings provider;
@@ -113,7 +114,7 @@ public final class TestSettings {
 
     public Settings build() {
         return new Settings("en", false, false, List.of(), enabled, chatbotName, language,
-                personalization, intervalSeconds, stopWhenIgnored, sleepMinutes, maxQueuedMessages, maxReplyLength,
+                personalization, intervalSeconds, stopWhenIgnored, sleepMinutes, chattiness, maxQueuedMessages, maxReplyLength,
                 10, 30, provider == null ? defaultProvider() : provider, features, Settings.Storage.defaults());
     }
 }
