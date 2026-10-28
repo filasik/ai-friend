@@ -48,6 +48,8 @@ import me.skerik.aifriend.chat.SimulationResult;
 import me.skerik.aifriend.config.Awareness;
 import me.skerik.aifriend.config.ChatFeatures;
 import me.skerik.aifriend.config.Settings;
+import me.skerik.aifriend.knowledge.KnowledgeBase;
+import me.skerik.aifriend.knowledge.ServerKnowledge;
 import me.skerik.aifriend.longmemory.LongTermMemory;
 import me.skerik.aifriend.storage.PlayerNotesStore;
 import org.jspecify.annotations.Nullable;
@@ -147,6 +149,7 @@ public final class ChatBot {
     private final AtomicInteger answeredExchanges = new AtomicInteger();
     private final AtomicBoolean extracting = new AtomicBoolean();
     private volatile @Nullable LongTermMemory longMemory;
+    private volatile @Nullable ServerKnowledge knowledge;
     private final Relationships relationships = new Relationships();
     private volatile Supplier<ServerContext.Snapshot> contextSource = ServerContext.Snapshot::empty;
 
@@ -232,6 +235,15 @@ public final class ChatBot {
     public void setLongMemory(@Nullable LongTermMemory memory) {
         this.longMemory = memory;
         if (memory == null) pendingNotes.clear();
+    }
+
+    /** The server knowledge (file, taught facts, self-description); null until the plugin has loaded it. */
+    public void setKnowledge(@Nullable ServerKnowledge knowledge) {
+        this.knowledge = knowledge;
+    }
+
+    public @Nullable ServerKnowledge knowledge() {
+        return knowledge;
     }
 
     public @Nullable LongTermMemory longMemory() {
@@ -526,10 +538,11 @@ public final class ChatBot {
         }
         String previous = r.memory.isActive() ? "" : lastReply;
         List<PromptBuilder.MemoryNote> notes = recall(lines, countUse);
-        PromptBuilder.Data data = new PromptBuilder.Data(lines, events, notes, relationsFor(r, lines, now), contextFor(r, lines));
+        PromptBuilder.Data data = new PromptBuilder.Data(lines, events, notes, relationsFor(r, lines, now), contextFor(r, lines),
+                knowledgeFor(r, lines));
         String user = PromptBuilder.user(data, previous);
         // the conversation history keeps the chat only: remembered notes are fetched fresh for every request
-        boolean extras = !notes.isEmpty() || !data.relations().isEmpty() || !data.context().isEmpty();
+        boolean extras = !notes.isEmpty() || !data.relations().isEmpty() || !data.context().isEmpty() || !data.knowledge().isEmpty();
         String plain = extras ? PromptBuilder.user(lines, events, previous) : user;
         messages.add(new ChatMessage(ChatMessage.Role.USER, user));
         return new Prepared(messages, user, plain, persona, history);
@@ -554,6 +567,15 @@ public final class ChatBot {
         return out;
     }
 
+    /** Server and self knowledge that fits what the players just wrote (in-memory word matching, no I/O). */
+    private List<KnowledgeBase.Entry> knowledgeFor(Runtime r, List<ChatLine> lines) {
+        ServerKnowledge k = knowledge;
+        if (k == null) return List.of();
+        StringBuilder query = new StringBuilder();
+        for (ChatLine line : lines) query.append(line.text()).append(' ');
+        return k.retrieve(query.toString(), r.settings.features().knowledge());
+    }
+
     /** How well the bot knows the players of this batch (only those it knows at least a little), as untrusted data lines. */
     private List<PromptBuilder.Relation> relationsFor(Runtime r, List<ChatLine> lines, long now) {
         Relationships.Config rc = r.settings.features().awareness().relationships();
@@ -576,7 +598,12 @@ public final class ChatBot {
 
     /** The world picture for this request: the general facts plus the surroundings of the players who wrote. */
     private ServerContext.Snapshot contextFor(Runtime r, List<ChatLine> lines) {
-        if (!r.settings.features().awareness().context().enabled()) return ServerContext.Snapshot.empty();
+        ServerContext.Config cc = r.settings.features().awareness().context();
+        if (!cc.enabled()) return ServerContext.Snapshot.empty();
+        StringBuilder said = new StringBuilder();
+        for (ChatLine line : lines) said.append(line.text()).append(' ');
+        // the bot must not keep telling players where they are: most requests carry no surroundings at all
+        if (!ServerContext.share(cc, said.toString(), ThreadLocalRandom.current())) return ServerContext.Snapshot.empty();
         List<String> names = lines.stream().map(ChatLine::player).distinct().toList();
         return contextSource.get().forPlayers(names, MAX_RELATIONS);
     }

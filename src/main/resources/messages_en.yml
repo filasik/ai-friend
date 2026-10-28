@@ -134,6 +134,25 @@ memory:
   forgot-relationship-player: '<prefix> <green>The bot has forgotten <player>.'
   forgot-relationship-all: '<prefix> <green>The bot has forgotten all players it knew (<count>).'
 
+# Server knowledge (/aifriend teach, /aifriend knowledge). <text> is admin text, never parsed as MiniMessage.
+knowledge:
+  disabled: '<prefix> <yellow>Server knowledge is switched off (knowledge.enabled in config.yml).'
+  empty: '<prefix> <yellow>Usage: <white>/aifriend teach <fact></white>'
+  too-long: '<prefix> <red>A fact can have at most <max> characters. Split it into several.'
+  full: '<prefix> <red>The bot already holds <max> taught facts. Remove some with /aifriend knowledge forget <number>.'
+  failed: '<prefix> <red>The knowledge file could not be written. See the console.'
+  taught: '<prefix> <green>Learned: <white><text>'
+  status:
+    - '<prefix> <gold>Server knowledge'
+    - '<gray>  File entries (knowledge.txt + taught): <white><file>'
+    - '<gray>  Built-in self-knowledge entries: <white><self>'
+    - '<gray>  Taught facts: <white><taught></white> · list them with <white>/aifriend knowledge list'
+  list-header: '<prefix> <gold>Taught facts (<count>)'
+  list-line: '<gray>  <number>. <white><text>'
+  list-empty: '<prefix> <gray>Nothing was taught with /aifriend teach yet.'
+  forgot: '<prefix> <green>Forgot: <white><text>'
+  forget-missing: '<prefix> <yellow>There is no taught fact with that number.'
+
 # Friendly private notes of the chat supervision (nothing else happens to the player).
 supervision:
   caps: '<prefix> <gray>Psst, your message is quite LOUD. Please ease off the caps lock :)'

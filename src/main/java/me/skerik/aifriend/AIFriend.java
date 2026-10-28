@@ -16,6 +16,7 @@ import me.skerik.aifriend.ai.provider.ProviderFactory;
 import me.skerik.aifriend.api.AiFriendApi;
 import me.skerik.aifriend.api.AiFriendResponseEvent;
 import me.skerik.aifriend.chat.OptOutStore;
+import me.skerik.aifriend.knowledge.ServerKnowledge;
 import me.skerik.aifriend.longmemory.LongTermMemory;
 import me.skerik.aifriend.storage.Database;
 import me.skerik.aifriend.storage.Migrations;
@@ -222,6 +223,9 @@ public final class AIFriend extends JavaPlugin implements Listener {
         ContextCollector collector = new ContextCollector(scheduler, () -> settings.features().awareness().context(),
                 System::currentTimeMillis);
         bot.setContextSource(collector::snapshot);
+        ServerKnowledge knowledge = new ServerKnowledge(getDataFolder().toPath(), getLogger());
+        bot.setKnowledge(knowledge);
+        scheduler.runAsync(() -> knowledge.load(settings));
         bot.setInterceptor((name, text, asker, source) -> {
             AiFriendResponseEvent event = new AiFriendResponseEvent(name, text, asker,
                     source == ChatBot.Source.DIRECT ? AiFriendResponseEvent.Source.DIRECT : AiFriendResponseEvent.Source.TIMED);
@@ -344,6 +348,8 @@ public final class AIFriend extends JavaPlugin implements Listener {
             ctx.update(settings, messages);
             ctx.bot.reload(settings);
             scheduler.runAsync(this::syncStorage);
+            ServerKnowledge knowledge = ctx.bot.knowledge();
+            if (knowledge != null) scheduler.runAsync(() -> knowledge.load(settings));
         }
     }
 

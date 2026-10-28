@@ -15,6 +15,8 @@ A friendly AI companion for your Minecraft chat. It reads the public chat and po
 - Players can switch the bot off for themselves with `/aifriend mute`
 - Optional long-term memory (off by default): the bot remembers facts players told about themselves, in SQLite or MariaDB; players list and delete their notes with `/aifriend memory` and `/aifriend forget`
 - World awareness and personality (all off by default): the bot knows the surroundings of the players who write (world, biome, nearby hostile mobs, and the time and weather each player really sees, also with Multiverse or Residence; never coordinates), has a mood that follows what happens (advancements, boss kills, deaths, griefing), gets to know players (stranger, acquaintance, regular, friend, with a nickname they pick via `/aifriend nickname`), starts a conversation or quiz when the chat is quiet (only with at least `min-players` online, never on an empty server) and sends friendly private hints about caps lock, spam and language (never a punishment)
+- Server knowledge (off by default): fill `knowledge.txt` with your rules, IP, shops and events, or add facts in game with `/aifriend teach <fact>` (admins only); the bot also knows what it sees, stores and can do, and answers questions like "do you read private messages?" correctly. Plain word matching, no extra request, no database
+- Fits the chat: does not answer every time (stays quiet when players talk among themselves, joins in when spoken to), picks up the tone, slang and atmosphere of the recent chat, and does not keep telling players where they are
 - Public API (`AiFriendResponseEvent`, `AiFriendApi`) and PlaceholderAPI placeholders (`%aifriend_state%`, `%aifriend_mood%`, `%aifriend_relationship%`, `%aifriend_nickname%`, `%aifriend_lastmessage%`, `%aifriend_provider%`, `%aifriend_queued%`, `%aifriend_muted%`, `%aifriend_calls_left%`)
 - Admin tools: `/aifriend sleep`, `wake`, `simulate` (dry run, nothing is posted), `cost`, `status`
 - Configurable bot name, reply language and a free-text `personalization`
@@ -44,11 +46,12 @@ A friendly AI companion for your Minecraft chat. It reads the public chat and po
 | `/aifriend sleep [minutes]` / `wake` | `aifriend.sleep` (op) | Quiet the bot or wake it |
 | `/aifriend simulate [nocall]` | `aifriend.simulate` (op) | Dry run without posting |
 | `/aifriend cost` | `aifriend.cost` (op) | Token totals and estimated cost |
+| `/aifriend teach <fact>` / `knowledge [list\|forget <n>]` | `aifriend.teach` (op) | Add / list / remove facts in the bot's knowledge |
 
 `aifriend.bypass-limits` (op) exempts a player from the cooldown and daily limits, `aifriend.bypass-supervision` (op) from the friendly chat hints.
 
 ## Configuration
-Key options in `config.yml` (all commented): `provider.*` (primary, failover, cache and per-provider settings), `personas`, `memory`, `limits`, `cost`, `reply-filter`, `mentions`, `opt-out`, `events`, `storage` (SQLite or MariaDB), `long-term-memory`, `server-context`, `mood`, `relationships`, `boredom`, `supervision`, `enabled`, `chatbot-name`, `language`, `personalization`, `interval-seconds` (5-3600), `stop-when-ignored`, `sleep-minutes`, `max-queued-messages`, `max-reply-length`, `http.*` timeouts, `locale` (`en`/`cs`), `update-check`, `metrics`. Full reference in the [README](https://github.com/filasik/ai-friend#configuration).
+Key options in `config.yml` (all commented): `provider.*` (primary, failover, cache and per-provider settings), `personas`, `memory`, `limits`, `cost`, `reply-filter`, `mentions`, `opt-out`, `events`, `storage` (SQLite or MariaDB), `long-term-memory`, `server-context`, `mood`, `relationships`, `boredom`, `supervision`, `knowledge`, `enabled`, `chatbot-name`, `language`, `personalization`, `interval-seconds` (5-3600), `stop-when-ignored`, `sleep-minutes`, `max-queued-messages`, `max-reply-length`, `http.*` timeouts, `locale` (`en`/`cs`), `update-check`, `metrics`. Full reference in the [README](https://github.com/filasik/ai-friend#configuration).
 
 ## Privacy / data
 
@@ -60,6 +63,8 @@ What leaves your server depends on `provider.primary` (and the failover list). A
 - **custom**: sent to the endpoint you configure (OpenRouter, your own server, ...).
 
 **Long-term memory** (off by default) stores, in your own database, the player UUID and name and short notes (max 120 characters) the model wrote from what the player said about themselves, plus optionally an embedding of each note. To find them, an extra request sends recent chat lines (with player names) to your AI provider every `extract-every-exchanges` answers, and with embeddings notes and chat text also go to the embedding service. The model is told to keep nothing sensitive and notes that look like contact data are dropped, but check `/aifriend memory <player>` if in doubt. Players delete their notes with `/aifriend forget`, muting the bot stops collection (and deletes the notes by default), `retention-days` removes old ones.
+
+**Server knowledge** (off by default): the entries of your `knowledge.txt`, of the taught facts and of the built-in self-description that fit the players' words are sent to your AI provider with the chat lines; nothing about players is stored there.
 
 **World awareness** (off by default): *server context* adds the time, weather, players online and, for the players who wrote, their world, biome and nearby hostile mobs (no coordinates) to every request; *relationships* store the player UUID, last name, a counter, first/last time and an optional nickname in your database (deleted by `/aifriend forget` and by muting the bot); *chat supervision* only looks at public lines in memory, makes no request and stores nothing.
 

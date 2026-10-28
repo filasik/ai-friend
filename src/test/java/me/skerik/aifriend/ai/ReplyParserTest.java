@@ -107,4 +107,20 @@ class ReplyParserTest {
     void legacyObjectWithResponseField() throws IOException {
         assertEquals(Reply.say("Hi"), parse("{\"response\":\"Hi\"}"));
     }
+
+    @Test
+    void truncatedJsonKeepsTheTextAndNeverPostsRawJson() throws IOException {
+        Reply r = parse("{\"action\":\"say\",\"text\":\"Kubushacku, jeskyn\\u011b p\\u0159esn\\u011b nevid\\u00edm, a \\\"\\n\\\" jsi na");
+        assertEquals(Reply.Action.SAY, r.action());
+        assertEquals("Kubushacku, jeskyně přesně nevidím, a \" \" jsi na", r.text());
+        assertEquals(Reply.NONE, parse("{\"action\":\"say\",\"te"));
+        assertEquals(Reply.SLEEP, parse("{\"action\":\"sleep\", \"tex"));
+    }
+
+    @Test
+    void skipMeansNoReplyAndNoSleep() throws IOException {
+        for (String body : new String[] {"{\"action\":\"skip\"}", "{\"action\":\"Pass\"}", "{\"action\":\"silent\"}"}) {
+            assertEquals(Reply.NONE, parse(body), body);
+        }
+    }
 }

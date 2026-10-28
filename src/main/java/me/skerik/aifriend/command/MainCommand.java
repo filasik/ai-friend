@@ -12,6 +12,7 @@ import me.skerik.aifriend.Context;
 import me.skerik.aifriend.ai.ChatBot;
 import me.skerik.aifriend.config.Messages;
 import me.skerik.aifriend.config.Settings;
+import me.skerik.aifriend.knowledge.ServerKnowledge;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -100,6 +101,21 @@ public final class MainCommand {
                         .then(Commands.literal("clear").executes(c -> player(c, (ctx, p) -> nickname(ctx, p, ""))))
                         .then(Commands.argument("nickname", StringArgumentType.greedyString())
                                 .executes(c -> player(c, (ctx, p) -> nickname(ctx, p, StringArgumentType.getString(c, "nickname"))))))
+                .then(Commands.literal("teach")
+                        .requires(src -> src.getSender().hasPermission("aifriend.teach"))
+                        .executes(c -> withContext(c, ctx -> c.getSource().getSender().sendMessage(ctx.messages().get("knowledge.empty"))))
+                        .then(Commands.argument("fact", StringArgumentType.greedyString())
+                                .executes(c -> withContext(c, ctx -> teach(ctx, c.getSource().getSender(),
+                                        StringArgumentType.getString(c, "fact"))))))
+                .then(Commands.literal("knowledge")
+                        .requires(src -> src.getSender().hasPermission("aifriend.teach"))
+                        .executes(c -> withContext(c, ctx -> knowledgeStatus(ctx, c.getSource().getSender())))
+                        .then(Commands.literal("list")
+                                .executes(c -> withContext(c, ctx -> knowledgeList(ctx, c.getSource().getSender()))))
+                        .then(Commands.literal("forget")
+                                .then(Commands.argument("number", IntegerArgumentType.integer(1))
+                                        .executes(c -> withContext(c, ctx -> knowledgeForget(ctx, c.getSource().getSender(),
+                                                IntegerArgumentType.getInteger(c, "number")))))))
                 .then(Commands.literal("limits")
                         .requires(src -> src.getSender().hasPermission("aifriend.ask"))
                         .executes(c -> player(c, this::limits)))
@@ -341,6 +357,81 @@ public final class MainCommand {
     private Component failed(Context ctx, Throwable e) {
         ctx.log.warning("Long-term memory command failed: " + e);
         return ctx.messages().get("memory.failed");
+    }
+
+    // ---- server knowledge ----
+
+    private ServerKnowledge knowledgeOrNull(Context ctx, CommandSender sender) {
+        ServerKnowledge k = ctx.bot.knowledge();
+        if (k == null || !ctx.settings().features().knowledge().enabled()) {
+            sender.sendMessage(ctx.messages().get("knowledge.disabled"));
+            return null;
+        }
+        return k;
+    }
+
+    private void teach(Context ctx, CommandSender sender, String fact) {
+        ServerKnowledge k = knowledgeOrNull(ctx, sender);
+        if (k == null) return;
+        Settings settings = ctx.settings();
+        ctx.scheduler.runAsync(() -> {
+            ServerKnowledge.TeachResult r = k.teach(fact, settings);
+            Messages m = ctx.messages();
+            Component reply = switch (r) {
+                case ADDED -> m.get("knowledge.taught", Messages.text("text", fact.strip()));
+                case EMPTY -> m.get("knowledge.empty");
+                case TOO_LONG -> m.get("knowledge.too-long", Messages.text("max", Integer.toString(ServerKnowledge.MAX_TAUGHT_CHARS)));
+                case FULL -> m.get("knowledge.full", Messages.text("max", Integer.toString(ServerKnowledge.MAX_TAUGHT)));
+                case ERROR -> m.get("knowledge.failed");
+            };
+            ctx.scheduler.runGlobal(() -> sender.sendMessage(reply));
+        });
+    }
+
+    private void knowledgeStatus(Context ctx, CommandSender sender) {
+        ServerKnowledge k = knowledgeOrNull(ctx, sender);
+        if (k == null) return;
+        ctx.scheduler.runAsync(() -> {
+            int taught = k.taught().size();
+            List<Component> lines = ctx.messages().list("knowledge.status",
+                    Messages.text("file", Integer.toString(k.fileEntries())),
+                    Messages.text("self", Integer.toString(k.selfEntries())),
+                    Messages.text("taught", Integer.toString(taught)));
+            ctx.scheduler.runGlobal(() -> lines.forEach(sender::sendMessage));
+        });
+    }
+
+    private void knowledgeList(Context ctx, CommandSender sender) {
+        ServerKnowledge k = knowledgeOrNull(ctx, sender);
+        if (k == null) return;
+        ctx.scheduler.runAsync(() -> {
+            List<String> all = k.taught();
+            Messages m = ctx.messages();
+            List<Component> out = new java.util.ArrayList<>();
+            if (all.isEmpty()) {
+                out.add(m.get("knowledge.list-empty"));
+            } else {
+                out.add(m.get("knowledge.list-header", Messages.text("count", Integer.toString(all.size()))));
+                int from = Math.max(0, all.size() - 20); // the newest twenty; the file holds the rest
+                for (int i = from; i < all.size(); i++) {
+                    out.add(m.get("knowledge.list-line", Messages.text("number", Integer.toString(i + 1)),
+                            Messages.text("text", all.get(i))));
+                }
+            }
+            ctx.scheduler.runGlobal(() -> out.forEach(sender::sendMessage));
+        });
+    }
+
+    private void knowledgeForget(Context ctx, CommandSender sender, int number) {
+        ServerKnowledge k = knowledgeOrNull(ctx, sender);
+        if (k == null) return;
+        Settings settings = ctx.settings();
+        ctx.scheduler.runAsync(() -> {
+            String removed = k.forgetTaught(number, settings);
+            Component reply = removed == null ? ctx.messages().get("knowledge.forget-missing")
+                    : ctx.messages().get("knowledge.forgot", Messages.text("text", removed));
+            ctx.scheduler.runGlobal(() -> sender.sendMessage(reply));
+        });
     }
 
     // ---- nickname (relationships) ----

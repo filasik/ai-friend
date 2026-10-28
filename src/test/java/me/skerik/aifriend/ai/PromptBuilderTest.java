@@ -182,4 +182,17 @@ class PromptBuilderTest {
         assertTrue(on.contains("upset and shaken") && on.contains("Break the silence once: tell a joke."), on);
         assertFalse(PromptBuilder.system(TestSettings.defaults().build(), null).contains("Your mood"));
     }
+
+    @Test
+    void theBotIsToMatchTheStyleOfTheChatAndNotToAnnounceTheSurroundings() {
+        var t = me.skerik.aifriend.TestSettings.defaults();
+        String plain = PromptBuilder.system(t.build(), null);
+        assertTrue(plain.contains("Write like the players in the recent chat"), plain);
+        assertTrue(plain.contains("never copy insults"), plain);
+        String aware = PromptBuilder.system(t.awareness(new me.skerik.aifriend.config.Awareness(
+                new me.skerik.aifriend.chat.ServerContext.Config(true, 30, 30, true, true, true, true, true, 16),
+                me.skerik.aifriend.chat.Mood.Config.defaults(), me.skerik.aifriend.chat.Relationships.Config.defaults(),
+                me.skerik.aifriend.chat.BoredomDetector.Config.defaults(), me.skerik.aifriend.chat.ChatSupervisor.Config.defaults())).build(), null);
+        assertTrue(aware.contains("NEVER tell players where they are"), aware);
+    }
 }

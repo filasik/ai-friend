@@ -25,6 +25,8 @@
 - **Vaše volba AI.** OpenAI (výchozí), Anthropic Claude, lokální server Ollama nebo libovolný endpoint kompatibilní s OpenAI, s řetězem záložních poskytovatelů a volitelnou cache odpovědí.
 - **Chytrý chat, vše volitelné a ve výchozím stavu vypnuté.** Persony, paměť konverzace, limity, odhad nákladů, filtr odpovědí, přímé dotazy (`/ai`, `@Jméno`), vypnutí bota pro jednotlivého hráče a reakce na události ve hře.
 - **Dlouhodobá paměť** (volitelná, vypnutá). Bot si pamatuje, co mu hráči o sobě řekli, v SQLite nebo MariaDB; hráči své poznámky vidí a mažou.
+- **Znalosti o serveru.** Do `knowledge.txt` napíšete pravidla, IP, obchody a události (nebo přidáte fakty ve hře přes `/aifriend teach`) a bot o vašem serveru odpovídá; zná také sám sebe: co vidí, co ukládá a co umí. Ve výchozím stavu vypnuto.
+- **Ladí s chatem.** Bot neodpovídá pokaždé: mlčí, když si hráči povídají mezi sebou, a zapojí se, když se na něj někdo obrátí. Přebírá tón, slang a atmosféru posledních zpráv, nezní jako návod a neříká hráčům pořád, kde jsou.
 - **Integrace.** Veřejné API (`AiFriendResponseEvent`, `AiFriendApi`) a placeholdery PlaceholderAPI, např. `%aifriend_mood%`.
 - **Podle vás.** Jméno bota, jazyk odpovědí a volný text `personalization` (web, vtipy, pravidla serveru, ...).
 - **Ví, kdy mlčet.** Pokud hráče bot zjevně štve, usne na `sleep-minutes`. Jediný hráč ho nemůže umlčet pro všechny.
@@ -34,7 +36,7 @@
 
 ## Rychlý start
 
-1. Dejte `ai-friend-3.0.0.jar` do `plugins/` a spusťte server.
+1. Dejte `ai-friend-3.0.1.jar` do `plugins/` a spusťte server.
 2. V `plugins/ai-friend/config.yml` vyberte poskytovatele a jeho API klíč zadejte do `provider.providers.<název>.api-key`, viz [Nastavení poskytovatele](#nastavení-poskytovatele).
 3. Spusťte `/aifriend reload` a pak `/aifriend status`, abyste ověřili, že bot běží.
 
@@ -186,11 +188,25 @@ Volitelná a ve výchozím stavu **vypnutá** (`long-term-memory.enabled`). Bot 
 
 `/aifriend reload` použije všechny volby včetně zapnutí a vypnutí funkce.
 
+## Znalosti o serveru
+
+Ve výchozím stavu vypnuto (`knowledge.enabled`). Bot před odpovědí prohledá malou znalostní bázi, takže umí hráčům říct něco o **vašem** serveru i o **sobě**:
+
+- **`plugins/ai-friend/knowledge.txt`** je váš (příklad se vytvoří při prvním startu). Řádek `# Nadpis` otevře záznam, řádky pod ním jsou jeho text (pár vět; delší záznamy se ořežou na 600 znaků). Bez nadpisů je záznamem každý odstavec. Volitelný řádek `keywords: slovo1 slovo2` přidá hledaná slova, která model nevidí (dejte tam slova, která hráči opravdu píšou, např. `ip adresa connect`); řádky začínající `//` jsou komentáře.
+- **`/aifriend teach <fakt>`** (admini, `aifriend.teach`) přidá fakt ze hry. Uloží se do `knowledge-taught.txt`, souboru, který vlastní plugin, takže váš ručně psaný soubor se nikdy nepřepisuje. `/aifriend knowledge` ukáže počty, `/aifriend knowledge list` naučené fakty a `/aifriend knowledge forget <číslo>` jeden smaže. Hráči do znalostní báze zapisovat nemohou; co hráč řekne o sobě ("stavím hrad"), zůstává v jeho vlastních [dlouhodobých poznámkách](#dlouhodobá-paměť).
+- **Znalosti o sobě** (`knowledge.self-knowledge`, výchozí zapnuto) je popis, který je součástí pluginu: co bot vidí (jen veřejný chat), kam chat jde, jak odpovídá, co si pamatuje, jaké má příkazy, co neumí (nespouští příkazy ani nikoho netrestá) a vygenerovaný řádek s funkcemi, které jsou na vašem serveru právě zapnuté. Hráči se mohou bota zeptat "co vidíš?" nebo "čteš soukromé zprávy?" a dostanou správnou odpověď.
+
+Jak to funguje: slova z posledního chatu se v paměti porovnají se záznamy (prosté porovnání slov, akcenty se ignorují a koncovky se ořezávají, takže funguje české i anglické skloňování; vzácnější slova váží víc). Do požadavku jako datové řádky `{"knowledge":...,"topic":...}` přijde nejvýše `max-entries-per-request` záznamů (výchozí 3) a `max-chars-per-request` znaků (výchozí 1200); když nic nesedí, nepřidá se nic, takže to nestojí žádný další požadavek ani databázi. Model má pokyn odpovídat podle nich a raději říct, že neví, než hádat. `/aifriend reload` soubory načte znovu. Vyhledávání přes embeddingy se zde nepoužívá (záznamy jsou krátké a porovnání slov je zdarma).
+
+**Soukromí:** záznamy, které se k dotazu hodí, se posílají vašemu AI poskytovateli spolu s řádky chatu. Do souboru nedávejte tajné věci (hesla, soukromé adresy).
+
 ## Vnímání světa a osobnost
 
 Novinka ve verzi 2.2.0, vše je ve výchozím stavu **vypnuté** a zapíná se zvlášť (`config.yml`, `/aifriend reload` změny použije).
 
 **Kontext serveru** (`server-context`). S každým požadavkem dostane bot krátký obrázek serveru: kolik hráčů je online a **jen u hráčů, kteří psali v aktuální dávce**, jejich svět, biom, nepřátelské moby do `radius` bloků a denní dobu (morning, afternoon, evening, night, dawn) a počasí, **které ten hráč vidí** (`"2 zombie, 1 creeper"`), takže umí říct „pozor, za tebou je creeper“. Čas a počasí se čtou za každého hráče zvlášť, ne jednou za server: jiné světy (Multiverse) mají vlastní den a počasí a pluginy jako Residence, `/ptime` nebo `/pweather` je nastavují jednotlivému hráči, takže vyhrává hodnota hráče. Světy bez střídání dne a noci (Nether, End, vlastní dimenze) žádnou nedají. Obecný čas a počasí se posílají jen když je všichni hráči vidí stejně; řádky hráčů je obsahují jen tam, kde se liší. Nikdy nedostane souřadnice, inventáře, adresy ani nic o hráčích, kteří nepsali. Obrázek se obnovuje každých `refresh-seconds` na vlákně, které data vlastní (globální úloha a jedna úloha na hráče, takže je bezpečný pro Folii), bot čte jen hotovou kopii. `time`, `weather`, `world`, `biome` a `nearby-mobs` jde vypnout jednotlivě. Vše jde s chatem k vašemu AI poskytovateli, viz [Soukromí a data](#soukromí-a-data).
+
+**Jak často se okolí zmiňuje.** Hráči nemusí pořád slyšet, kde jsou. Okolí nese jen `share-percent` požadavků (výchozí 10), pravidla botovi říkají, ať ho použije, jen když se hráč zeptá nebo na tom opravdu záleží, a když jsou slova hráčů o okolí (kde, počasí, noc, moby, ...), je v požadavku vždy. Pro staré chování nastavte `share-percent: 100`.
 
 **Nálada** (`mood`). Číslo od -100 do 100, které se s poločasem (`half-life-minutes`) vrací do klidu. Úspěchy (+8), první připojení hráče (+10) a zabití Ender Draka nebo Witheru (+35) bota rozveselí; smrt (-12), tři smrti během pěti minut (navíc -25) a tři výbuchy síly 3 a víc během dvou minut (vypadá jako griefing, navíc -20) ho srazí. Úroveň (thrilled, cheerful, calm, uneasy, upset) jde do systémového promptu jako nápověda k tónu; nikdy nemění, co bot smí. Funguje i s vypnutými reakcemi `events`, ukazuje ji `/aifriend status` a `%aifriend_mood%` a po restartu začíná klidná.
 
@@ -256,6 +272,8 @@ AiFriendApi api = Bukkit.getServicesManager().load(AiFriendApi.class); // null, 
 | `/aifriend wake` | Probudí bota | `aifriend.sleep` |
 | `/aifriend simulate [nocall]` | Zkušební běh: ukáže personu, požadavek, velikost historie, odhad tokenů, co brání odpovědi a vyfiltrovanou odpověď. `nocall` přeskočí volání poskytovatele, takže nestojí nic | `aifriend.simulate` |
 | `/aifriend cost` | Součty tokenů a odhad nákladů (vyžaduje `cost.enabled`) | `aifriend.cost` |
+| `/aifriend teach <fakt>` | Přidá fakt do znalostí bota (vyžaduje `knowledge.enabled`) | `aifriend.teach` |
+| `/aifriend knowledge [list\|forget <číslo>]` | Počty, výpis naučených faktů, smazání jednoho | `aifriend.teach` |
 
 ## Oprávnění
 
@@ -272,6 +290,7 @@ AiFriendApi api = Bukkit.getServicesManager().load(AiFriendApi.class); // null, 
 | `aifriend.bypass-limits` | op | Nevztahuje se na něj cooldown ani denní limity |
 | `aifriend.nickname` | všichni | `/aifriend nickname` |
 | `aifriend.bypass-supervision` | op | Žádná přátelská upozornění na caps lock, spam a jazyk |
+| `aifriend.teach` | op | `/aifriend teach`, `/aifriend knowledge` |
 
 ## Konfigurace
 
@@ -367,6 +386,12 @@ AiFriendApi api = Bukkit.getServicesManager().load(AiFriendApi.class); // null, 
 | `long-term-memory.embeddings.backend` | `none` | `none` (hledání podle slov) nebo název v `provider.providers` |
 | `long-term-memory.embeddings.model` | prázdné | Prázdné = `text-embedding-3-small` / `nomic-embed-text` |
 | `long-term-memory.embeddings.base-url` | prázdné | Prázdné = `base-url` poskytovatele |
+| `knowledge.enabled` | `false` | Bot před odpovědí prohledá `knowledge.txt`, naučené fakty a popis sebe sama |
+| `knowledge.file` | `knowledge.txt` | Váš soubor se znalostmi ve složce pluginu |
+| `knowledge.max-entries-per-request` | `3` | Záznamy přidané do jednoho požadavku (1-10) |
+| `knowledge.max-chars-per-request` | `1200` | Znaky přidané do jednoho požadavku (200-6000) |
+| `knowledge.self-knowledge` | `true` | Bot umí odpovídat na otázky o sobě |
+| `server-context.share-percent` | `10` | Podíl požadavků, které vůbec nesou okolí (0-100); vždy, když se na něj hráči ptají |
 
 Příklad:
 
@@ -403,6 +428,7 @@ Upozornění:
 - S řetězem záložních poskytovatelů jde chat tomu, kdo nakonec odpoví; každý člen řetězu je potenciální příjemce.
 - API klíče jsou jen v `config.yml`, v čistém textu jako každé nastavení pluginu. Soubor držte v soukromí. Klíče jsou maskované v `/aifriend status` a odstraněné z chybových hlášek i logu; posílají se jen v hlavičkách požadavku svému poskytovateli. Přesměrování se nesledují.
 - Umlčení hráči (`opt-out`) se nikdy neukládají ani neposílají. Seznam (`muted-players.yml`) obsahuje UUID hráčů na vašem serveru.
+- **Znalosti o serveru** (ve výchozím stavu vypnuté). Záznamy z `knowledge.txt`, z naučených faktů a z vestavěného popisu bota, které se hodí k slovům hráčů (nejvýše `max-entries-per-request`), se posílají vašemu AI poskytovateli spolu s řádky chatu. Čtou se ze souborů ve složce pluginu; nic o hráčích se neukládá.
 - **Vnímání světa** (vše ve výchozím stavu vypnuté). *Kontext serveru* posílá s každým požadavkem denní dobu, počasí, počet hráčů online a u hráčů, kteří psali, jejich svět, biom a nepřátelské moby poblíž (nikdy souřadnice) vašemu AI poskytovateli. *Vztahy* ukládají ve vaší databázi UUID hráče, poslední jméno, počet zodpovězených výměn, první a poslední čas a volitelnou přezdívku, kterou hráč napsal; `/aifriend forget` je smaže, ztlumení bota je smaže a zastaví sběr, a přezdívka s úrovní jdou poskytovateli spolu s řádky chatu daného hráče. *Nálada* a *nuda* drží v paměti jen počítadla. *Dohled nad chatem* čte veřejné řádky jen v paměti (nevolá AI, nic neukládá a hráče, kteří bota ztlumili, nesleduje).
 - Paměť konverzace, limity, součty nákladů a cache jsou jen v paměti a s restartem zmizí (výjimkou je dlouhodobá paměť, viz níže).
 - **Dlouhodobá paměť** (ve výchozím stavu vypnutá) je jediná funkce, která ukládá data o hráčích. Ve vaší vlastní databázi (`storage`) ukládá: UUID hráče, jméno hráče, krátkou poznámku (max 120 znaků, kterou z toho, co hráč řekl sám o sobě, napsal model), kdy vznikla a kdy byla naposledy použita, a případně embedding vektor poznámky. Nic dalšího z chatu se neukládá. **K nalezení poznámek se každých `extract-every-exchanges` odpovědí posílá dodatečný požadavek s posledními řádky chatu (se jmény hráčů) vašemu AI poskytovateli**, a s embeddingy jdou poznámky a text chatu i embedding službě. Řekněte to hráčům. Model má pokyn nic citlivého neukládat a poznámky podobné kontaktním údajům plugin zahodí, ale model se může splést: v případě pochybností zkontrolujte `/aifriend memory <hráč>`. Hráči poznámky vidí a mažou přes `/aifriend memory` a `/aifriend forget`, admini přes `forget <hráč>` a `forget-all`, ztlumení zastaví sběr a (ve výchozím stavu) poznámky smaže a `retention-days` odstraňuje staré. S MariaDB leží poznámky na vašem databázovém serveru a sdílí je všechny servery, které ji používají.
@@ -415,7 +441,7 @@ Upozornění:
 - Pokud `config.yml` v `provider.primary` stále vybírá odstraněného poskytovatele, nebo má `api-key` na nejvyšší úrovni a poskytovatele nikdy nevybral, bot zůstane **neaktivní a nic neodesílá**; log to řekne jedním řádkem. Pokračujte nastavením `provider.primary` na `openai`, `anthropic`, `ollama` nebo `custom`, doplněním `api-key` toho poskytovatele (viz [Nastavení poskytovatele](#nastavení-poskytovatele)) a `/aifriend reload`.
 - Odstraněný název v `provider.failover` se přeskočí s varováním.
 - `api-key` na nejvyšší úrovni, který v souboru zůstal, se ignoruje (s varováním) a nikam se nekopíruje. Po přesunu klíče ho smažte.
-- `config-version` se změní na 5; nejdřív se uloží záloha `config.yml.bak-v<stará>` a žádná vaše hodnota se nezmění.
+- `config-version` se změní na 6; nejdřív se uloží záloha `config.yml.bak-v<stará>` a žádná vaše hodnota se nezmění.
 
 Přesné staré názvy jsou v [CHANGELOGu](CHANGELOG.md).
 

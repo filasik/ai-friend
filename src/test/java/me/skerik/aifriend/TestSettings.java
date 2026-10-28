@@ -38,61 +38,61 @@ public final class TestSettings {
 
     public TestSettings personas(PersonaSelector.Config c) {
         features = new ChatFeatures(c, features.memory(), features.limits(), features.cost(), features.replyFilter(),
-                features.mentions(), features.optOut(), features.events(), features.longMemory(), features.awareness());
+                features.mentions(), features.optOut(), features.events(), features.longMemory(), features.awareness(), features.knowledge());
         return this;
     }
 
     public TestSettings memory(ConversationMemory.Config c) {
         features = new ChatFeatures(features.personas(), c, features.limits(), features.cost(), features.replyFilter(),
-                features.mentions(), features.optOut(), features.events(), features.longMemory(), features.awareness());
+                features.mentions(), features.optOut(), features.events(), features.longMemory(), features.awareness(), features.knowledge());
         return this;
     }
 
     public TestSettings limits(RateLimiter.Config c) {
         features = new ChatFeatures(features.personas(), features.memory(), c, features.cost(), features.replyFilter(),
-                features.mentions(), features.optOut(), features.events(), features.longMemory(), features.awareness());
+                features.mentions(), features.optOut(), features.events(), features.longMemory(), features.awareness(), features.knowledge());
         return this;
     }
 
     public TestSettings cost(CostTracker.Config c) {
         features = new ChatFeatures(features.personas(), features.memory(), features.limits(), c, features.replyFilter(),
-                features.mentions(), features.optOut(), features.events(), features.longMemory(), features.awareness());
+                features.mentions(), features.optOut(), features.events(), features.longMemory(), features.awareness(), features.knowledge());
         return this;
     }
 
     public TestSettings replyFilter(ReplyFilter.Config c) {
         features = new ChatFeatures(features.personas(), features.memory(), features.limits(), features.cost(), c,
-                features.mentions(), features.optOut(), features.events(), features.longMemory(), features.awareness());
+                features.mentions(), features.optOut(), features.events(), features.longMemory(), features.awareness(), features.knowledge());
         return this;
     }
 
     public TestSettings mentions(MentionDetector.Config c) {
         features = new ChatFeatures(features.personas(), features.memory(), features.limits(), features.cost(),
-                features.replyFilter(), c, features.optOut(), features.events(), features.longMemory(), features.awareness());
+                features.replyFilter(), c, features.optOut(), features.events(), features.longMemory(), features.awareness(), features.knowledge());
         return this;
     }
 
     public TestSettings optOut(OptOutStore.Config c) {
         features = new ChatFeatures(features.personas(), features.memory(), features.limits(), features.cost(),
-                features.replyFilter(), features.mentions(), c, features.events(), features.longMemory(), features.awareness());
+                features.replyFilter(), features.mentions(), c, features.events(), features.longMemory(), features.awareness(), features.knowledge());
         return this;
     }
 
     public TestSettings events(EventPrompts.Config c) {
         features = new ChatFeatures(features.personas(), features.memory(), features.limits(), features.cost(),
-                features.replyFilter(), features.mentions(), features.optOut(), c, features.longMemory(), features.awareness());
+                features.replyFilter(), features.mentions(), features.optOut(), c, features.longMemory(), features.awareness(), features.knowledge());
         return this;
     }
 
     public TestSettings longMemory(LongTermMemory.Config c) {
         features = new ChatFeatures(features.personas(), features.memory(), features.limits(), features.cost(),
-                features.replyFilter(), features.mentions(), features.optOut(), features.events(), c, features.awareness());
+                features.replyFilter(), features.mentions(), features.optOut(), features.events(), c, features.awareness(), features.knowledge());
         return this;
     }
 
     public TestSettings awareness(Awareness a) {
         features = new ChatFeatures(features.personas(), features.memory(), features.limits(), features.cost(),
-                features.replyFilter(), features.mentions(), features.optOut(), features.events(), features.longMemory(), a);
+                features.replyFilter(), features.mentions(), features.optOut(), features.events(), features.longMemory(), a, features.knowledge());
         return this;
     }
 
@@ -102,6 +102,13 @@ public final class TestSettings {
         java.util.logging.Logger quiet = java.util.logging.Logger.getAnonymousLogger();
         quiet.setLevel(java.util.logging.Level.OFF);
         return ProviderSettings.load(y, quiet);
+    }
+
+    public TestSettings knowledge(me.skerik.aifriend.knowledge.ServerKnowledge.Config k) {
+        features = new ChatFeatures(features.personas(), features.memory(), features.limits(), features.cost(),
+                features.replyFilter(), features.mentions(), features.optOut(), features.events(), features.longMemory(),
+                features.awareness(), k);
+        return this;
     }
 
     public Settings build() {

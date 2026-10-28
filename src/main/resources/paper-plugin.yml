@@ -48,3 +48,6 @@ permissions:
   aifriend.bypass-supervision:
     description: No friendly notes about caps lock, spam or language (chat supervision)
     default: op
+  aifriend.teach:
+    description: Add facts to the bot's knowledge (/aifriend teach, /aifriend knowledge)
+    default: op

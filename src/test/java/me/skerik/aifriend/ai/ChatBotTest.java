@@ -1324,4 +1324,27 @@ class ChatBotTest {
         assertEquals(9, rem.playerCalls());
         assertEquals(950, rem.playerTokens());
     }
+
+    @Test
+    void theModelMayChooseToSkipAnExchange() {
+        next = r -> ok("{\"action\":\"skip\"}");
+        chat("a", "lol");
+        chat("b", "xd");
+        bot.tick();
+        assertEquals(1, requests.size());
+        assertTrue(said.isEmpty(), "nothing is posted");
+        assertEquals(0, bot.status().queued(), "the lines were handled, they are not asked about again");
+        assertEquals(0, bot.status().failures(), "a skip is not a failure");
+        assertEquals(ChatBot.State.RUNNING, state(), "and it is not sleeping either");
+    }
+
+    @Test
+    void theSystemPromptTellsTheBotItMayStayQuietButMustAnswerWhenSpokenTo() {
+        chat("a", "hello");
+        bot.tick();
+        String sys = requests.getLast().messages().getFirst().content();
+        assertTrue(sys.contains("{\"action\":\"skip\"}"), sys);
+        assertTrue(sys.contains("You do not have to answer every time"), sys);
+        assertTrue(sys.contains("Always answer (\"say\") when someone speaks to you"), sys);
+    }
 }

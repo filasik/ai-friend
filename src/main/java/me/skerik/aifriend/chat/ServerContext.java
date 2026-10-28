@@ -18,10 +18,18 @@ public final class ServerContext {
 
     /** Config section {@code server-context}. Default: off. Every detail can be switched off on its own. */
     public record Config(boolean enabled, int refreshSeconds, int maxPlayers, boolean time, boolean weather,
-                         boolean world, boolean biome, boolean nearbyMobs, int radius) {
+                         boolean world, boolean biome, boolean nearbyMobs, int radius, int sharePercent) {
+
+        public static final int DEFAULT_SHARE_PERCENT = 10;
+
+        /** Same with {@code sharePercent} 100: the picture is in every request. */
+        public Config(boolean enabled, int refreshSeconds, int maxPlayers, boolean time, boolean weather,
+                      boolean world, boolean biome, boolean nearbyMobs, int radius) {
+            this(enabled, refreshSeconds, maxPlayers, time, weather, world, biome, nearbyMobs, radius, 100);
+        }
 
         public static Config defaults() {
-            return new Config(false, 30, 30, true, true, true, true, true, 16);
+            return new Config(false, 30, 30, true, true, true, true, true, 16, DEFAULT_SHARE_PERCENT);
         }
 
         public static Config load(@Nullable ConfigurationSection s, Logger log) {
@@ -30,7 +38,8 @@ public final class ServerContext {
                     Cfg.bounded(s, "max-players", 1, 200, 30, log),
                     Cfg.bool(s, "time", true), Cfg.bool(s, "weather", true), Cfg.bool(s, "world", true),
                     Cfg.bool(s, "biome", true), Cfg.bool(s, "nearby-mobs", true),
-                    Cfg.bounded(s, "radius", 4, 48, 16, log));
+                    Cfg.bounded(s, "radius", 4, 48, 16, log),
+                    Cfg.bounded(s, "share-percent", 0, 100, DEFAULT_SHARE_PERCENT, log));
         }
     }
 
@@ -70,6 +79,22 @@ public final class ServerContext {
                     .limit(max).toList();
             return new Snapshot(time, weather, online, picked);
         }
+    }
+
+    private static final java.util.regex.Pattern ASKS_ABOUT_SURROUNDINGS = java.util.regex.Pattern.compile(
+            "(?iu)(?<![\\p{L}\\p{N}])(kde|where|weather|po[cč]as[ií]|biom|biome|mob|mobs|moby|zombie|zombii|creeper|skeleton|"
+                    + "kostlivec|pavouk|spider|enderman|noc|night|rain|pr[sš][ií]|bou[rř]ka|storm|hostile|nep[rř][aá]tel\\p{L}*)"
+                    + "(?![\\p{L}\\p{N}])");
+
+    /**
+     * Whether the surroundings may go into this request. Telling players where they are all the time is annoying, so
+     * normally only {@code sharePercent} of the requests carry them; when the players' own words are about the surroundings
+     * (where, weather, day or night, mobs) they always do.
+     */
+    public static boolean share(Config config, String playersText, java.util.random.RandomGenerator random) {
+        if (config.sharePercent() >= 100) return true;
+        if (ASKS_ABOUT_SURROUNDINGS.matcher(playersText).find()) return true;
+        return config.sharePercent() > 0 && random.nextInt(100) < config.sharePercent();
     }
 
     /** morning, afternoon, evening, night or dawn, from the world time in ticks (0 = sunrise). */

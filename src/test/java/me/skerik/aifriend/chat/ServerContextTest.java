@@ -68,4 +68,39 @@ class ServerContextTest {
         assertEquals(ServerContext.Config.defaults(), ServerContext.Config.load(null, log));
         assertFalse(ServerContext.Config.defaults().enabled());
     }
+
+    @Test
+    void surroundingsAreOnlyInAFractionOfTheRequestsUnlessPlayersAskAboutThem() {
+        var quarter = new ServerContext.Config(true, 30, 30, true, true, true, true, true, 16, 25);
+        var never = new ServerContext.Config(true, 30, 30, true, true, true, true, true, 16, 0);
+        var always = new ServerContext.Config(true, 30, 30, true, true, true, true, true, 16);
+        assertEquals(10, ServerContext.Config.defaults().sharePercent());
+        assertEquals(100, always.sharePercent());
+
+        java.util.Random random = new java.util.Random(42);
+        int shared = 0;
+        for (int i = 0; i < 2000; i++) if (ServerContext.share(quarter, "lol that was funny", random)) shared++;
+        assertTrue(shared > 350 && shared < 650, "about a quarter, was " + shared);
+        for (int i = 0; i < 100; i++) assertFalse(ServerContext.share(never, "lol that was funny", random));
+        for (int i = 0; i < 100; i++) assertTrue(ServerContext.share(always, "lol that was funny", random));
+
+        for (String about : new String[] {"kde jsem?", "jaké je počasí", "je tu noc", "Where am I", "prší", "co je za biom",
+                "něco za mnou, zombie!", "nepřátelé všude"}) {
+            assertTrue(ServerContext.share(never, about, random), about);
+        }
+        assertFalse(ServerContext.share(never, "kdepak, denní doba nic", random), "whole words only");
+        assertFalse(ServerContext.share(never, "dobrý den všem, good day", random), "greetings are not about the surroundings");
+    }
+
+    @Test
+    void sharePercentIsValidated() {
+        var y = new YamlConfiguration();
+        y.set("enabled", true);
+        y.set("share-percent", 150);
+        Logger log = Logger.getLogger("ServerContextTest");
+        log.setLevel(Level.OFF);
+        assertEquals(10, ServerContext.Config.load(y, log).sharePercent());
+        y.set("share-percent", 0);
+        assertEquals(0, ServerContext.Config.load(y, log).sharePercent());
+    }
 }

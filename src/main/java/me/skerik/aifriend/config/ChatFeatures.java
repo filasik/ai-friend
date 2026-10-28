@@ -9,6 +9,7 @@ import me.skerik.aifriend.chat.OptOutStore;
 import me.skerik.aifriend.chat.PersonaSelector;
 import me.skerik.aifriend.chat.RateLimiter;
 import me.skerik.aifriend.chat.ReplyFilter;
+import me.skerik.aifriend.knowledge.ServerKnowledge;
 import me.skerik.aifriend.longmemory.LongTermMemory;
 import org.bukkit.configuration.file.FileConfiguration;
 
@@ -17,14 +18,14 @@ public record ChatFeatures(
         PersonaSelector.Config personas, ConversationMemory.Config memory, RateLimiter.Config limits,
         CostTracker.Config cost, ReplyFilter.Config replyFilter, MentionDetector.Config mentions,
         OptOutStore.Config optOut, EventPrompts.Config events, LongTermMemory.Config longMemory,
-        Awareness awareness
+        Awareness awareness, ServerKnowledge.Config knowledge
 ) {
 
     public static ChatFeatures defaults() {
         return new ChatFeatures(PersonaSelector.Config.defaults(), ConversationMemory.Config.defaults(),
                 RateLimiter.Config.defaults(), CostTracker.Config.defaults(), ReplyFilter.Config.defaults(),
                 MentionDetector.Config.defaults(), OptOutStore.Config.defaults(), EventPrompts.Config.defaults(),
-                LongTermMemory.Config.defaults(), Awareness.defaults());
+                LongTermMemory.Config.defaults(), Awareness.defaults(), ServerKnowledge.Config.defaults());
     }
 
     public static ChatFeatures load(FileConfiguration c, Logger log) {
@@ -38,6 +39,7 @@ public record ChatFeatures(
                 OptOutStore.Config.load(c.getConfigurationSection("opt-out"), log),
                 EventPrompts.Config.load(c.getConfigurationSection("events"), log),
                 LongTermMemory.Config.load(c.getConfigurationSection("long-term-memory"), log),
-                Awareness.load(c, log));
+                Awareness.load(c, log),
+                ServerKnowledge.Config.load(c.getConfigurationSection("knowledge"), log));
     }
 }

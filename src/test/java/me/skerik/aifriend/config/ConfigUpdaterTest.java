@@ -123,12 +123,12 @@ class ConfigUpdaterTest {
 
     @Test
     void bundledConfigDeclaresAVersion() throws Exception {
-        assertEquals(5, bundled().getInt(ConfigUpdater.VERSION_KEY, 0));
+        assertEquals(6, bundled().getInt(ConfigUpdater.VERSION_KEY, 0));
     }
 
     private static final java.util.List<String> NEW_SECTIONS = java.util.List.of("provider", "personas", "memory",
             "limits", "cost", "reply-filter", "mentions", "opt-out", "events", "storage", "long-term-memory",
-            "server-context", "mood", "relationships", "boredom", "supervision");
+            "server-context", "mood", "relationships", "boredom", "supervision", "knowledge");
 
     /** What a 2.0.0 install wrote: config-version 1, only the 2.0.0 keys, one admin comment. */
     private static final String V200 = """
@@ -160,7 +160,7 @@ class ConfigUpdaterTest {
             assertTrue(user.isConfigurationSection(section), section + " missing");
             assertFalse(user.getComments(section).isEmpty(), section + " has no comment");
         }
-        assertEquals(5, user.getInt(ConfigUpdater.VERSION_KEY));
+        assertEquals(6, user.getInt(ConfigUpdater.VERSION_KEY));
         assertTrue(out.contains("Conversation memory"), out);
         assertTrue(out.contains("Rate limits"), out);
     }
@@ -256,7 +256,7 @@ class ConfigUpdaterTest {
         YamlConfiguration defaults = bundled();
         assertTrue(ConfigUpdater.merge(user, defaults) > 0);
         String out = user.saveToString();
-        assertEquals(5, user.getInt(ConfigUpdater.VERSION_KEY));
+        assertEquals(6, user.getInt(ConfigUpdater.VERSION_KEY));
         assertTrue(out.contains("# my provider note"), out);
         assertEquals("openai", user.getString("provider.primary"));
         assertEquals("sk-openai-abcdefgh", user.getString("provider.providers.openai.api-key"));
@@ -300,7 +300,7 @@ class ConfigUpdaterTest {
         YamlConfiguration defaults = bundled();
         assertTrue(ConfigUpdater.merge(user, defaults) > 0);
         String out = user.saveToString();
-        assertEquals(5, user.getInt(ConfigUpdater.VERSION_KEY));
+        assertEquals(6, user.getInt(ConfigUpdater.VERSION_KEY));
         assertEquals(45, user.getInt("interval-seconds"));
         assertTrue(user.getBoolean("long-term-memory.enabled"));
         assertEquals(9, user.getInt("long-term-memory.retrieval-top-k"));
@@ -388,7 +388,7 @@ class ConfigUpdaterTest {
         ConfigUpdater.flagRetiredProxy(user);
         ConfigUpdater.merge(user, bundled());
         assertEquals("proxy", user.getString("provider.primary"));
-        assertEquals(5, user.getInt(ConfigUpdater.VERSION_KEY));
+        assertEquals(6, user.getInt(ConfigUpdater.VERSION_KEY));
         Settings s = settingsOf(user, new java.util.ArrayList<>());
         assertTrue(s.provider().retiredProxy());
         assertTrue(inactive(s), "the openai key must not make the bot send chat elsewhere");

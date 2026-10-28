@@ -1,5 +1,15 @@
 # Changelog
 
+## 3.0.1
+
+Server knowledge, a chat-style bot and a bot that stops telling players where they are. `config-version` is now 6; the new `knowledge` section and `server-context.share-percent` are added to your `config.yml` automatically (backup `config.yml.bak-v5`), your values stay. Server knowledge is off by default.
+
+- New: **server knowledge** (`knowledge.*`, off by default): the bot searches `knowledge.txt` (yours, an example is created on the first start), the facts added with `/aifriend teach <fact>` (`knowledge-taught.txt`) and a built-in self-description (what it sees, where chat goes, what it stores, its commands, what it cannot do, which features are on) and adds the few entries that fit the players' words to the request as data. Plain word matching in memory (accents ignored, endings cut): no extra request and no database. `/aifriend knowledge [list|forget <n>]`; permission `aifriend.teach` (op). Only admins can add knowledge; players' own facts stay in their long-term notes
+- Change: the bot **does not have to answer every time**: it may answer `{"action":"skip"}` when players talk among themselves, it has nothing to add, it just spoke or the lines are only reactions ("lol", "xd"). It still always answers when someone speaks to it, asks it something or mentions its name, and when the plugin tells it to start a conversation. A skip is neither a failure nor sleeping; the lines are simply handled
+- Change: the bot now **adapts to the style of the recent chat** (tone, slang, length, atmosphere) instead of sounding formal, and never copies insults
+- Change: the bot no longer tells players where they are all the time (it greeted players with "in the jungle it looks nice" in nearly every reply). `server-context.share-percent` (default 10) is the share of requests that carry the surroundings at all, the rules now say never to volunteer them, and they are always included when the players' words are about them (where, weather, night, mobs; the words "den"/"day" no longer count, they matched "dobrý den"). Set `share-percent: 100` for the old behaviour
+- Fix: an answer that was cut off by `max-output-tokens` (broken JSON) is no longer posted to the chat as raw JSON; the text written so far is used, or nothing
+
 ## 3.0.0
 
 **Breaking: the `proxy` provider and the `trial` key are removed.** AI Friend now talks only to the provider you configure yourself: `openai`, `anthropic`, `ollama` or `custom` (any OpenAI-compatible server). The plugin sends nothing to the author's server (the old relay at `gpt.netuj.eu` is no longer contacted). The only other outbound calls are bStats (`metrics: false`) and the GitHub update check (`update-check: false`). `config-version` is now 5.

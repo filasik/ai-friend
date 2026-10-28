@@ -26,6 +26,8 @@ It reads the public chat and posts short replies as a bot of your own name, lang
 - **Your choice of AI.** OpenAI (default), Anthropic Claude, a local Ollama server or any OpenAI-compatible endpoint, with a failover chain and an optional answer cache.
 - **Chat intelligence, all optional and off by default.** Personas, conversation memory, rate and daily limits, cost estimate, reply filter, direct questions (`/ai`, `@Name`), per-player mute and reactions to game events.
 - **Long-term memory** (optional, off by default). The bot remembers what players told it about themselves, in SQLite or MariaDB, and players can list and delete their notes.
+- **Server knowledge.** Fill `knowledge.txt` with your rules, IP, shops and events (or add facts in game with `/aifriend teach`) and the bot answers about your server; it also knows what it sees, stores and can do. Off by default.
+- **Fits the chat.** The bot does not answer every time: it stays quiet when players talk among themselves and joins in when spoken to. It picks up the tone, slang and atmosphere of the recent chat instead of sounding like a manual, and does not keep telling players where they are.
 - **Integrations.** A public API (`AiFriendResponseEvent`, `AiFriendApi`) and PlaceholderAPI placeholders such as `%aifriend_mood%`.
 - **Yours to shape.** Bot name, reply language and a free-text `personalization` (your website, jokes, house rules, ...).
 - **Knows when to be quiet.** If players seem annoyed with the bot, it sleeps for `sleep-minutes`. One player alone cannot silence it for everyone.
@@ -35,7 +37,7 @@ It reads the public chat and posts short replies as a bot of your own name, lang
 
 ## Quick start
 
-1. Put `ai-friend-3.0.0.jar` in `plugins/` and start the server.
+1. Put `ai-friend-3.0.1.jar` in `plugins/` and start the server.
 2. Open `plugins/ai-friend/config.yml` and choose a provider and put its API key under `provider.providers.<name>.api-key`, see [Provider setup](#provider-setup).
 3. Run `/aifriend reload`, then `/aifriend status` to check the bot is running.
 
@@ -187,11 +189,25 @@ Optional and **off by default** (`long-term-memory.enabled`). The bot remembers 
 
 `/aifriend reload` applies every option, including switching the feature on or off.
 
+## Server knowledge
+
+Off by default (`knowledge.enabled`). The bot searches a small knowledge base before it answers, so it can tell players about **your** server and about **itself**:
+
+- **`plugins/ai-friend/knowledge.txt`** is yours (an example is created on the first start). A line `# Title` opens an entry, the lines below it are its text (a few sentences; longer entries are cut at 600 characters). Without headings every paragraph is an entry. An optional `keywords: word1 word2` line adds search words that are not shown to the model (use it for the words players really type, e.g. `ip adresa connect`), and lines starting with `//` are comments.
+- **`/aifriend teach <fact>`** (admins, `aifriend.teach`) adds a fact from in game. It goes to `knowledge-taught.txt`, a file the plugin owns, so your hand-written file is never rewritten. `/aifriend knowledge` shows the counts, `/aifriend knowledge list` the taught facts and `/aifriend knowledge forget <number>` removes one. Players cannot add to the knowledge base; what a player says about themselves ("I build a castle") still goes to their own [long-term notes](#long-term-memory).
+- **Self-knowledge** (`knowledge.self-knowledge`, on by default) is a description that ships with the plugin: what the bot sees (only public chat), where the chat goes, how it answers, what it remembers, its commands, what it cannot do (it cannot run commands or punish anyone), plus a generated line with the features that are on at your server right now. Players can ask the bot "what do you see?" or "do you read private messages?" and get a correct answer.
+
+How it works: the words of the recent chat are matched against the entries in memory (plain word matching, accents are ignored and endings are cut, so Czech and English inflections work; rarer words count more). At most `max-entries-per-request` entries (default 3) and `max-chars-per-request` characters (default 1200) are added to the request as data lines `{"knowledge":...,"topic":...}`; when nothing fits, nothing is added, so it costs no extra request and no database. The model is told to answer from them and to say it does not know instead of guessing. `/aifriend reload` re-reads the files. Embedding search is not used here (the entries are short and the word matching is free).
+
+**Privacy:** the entries that fit a question are sent to your AI provider together with the chat lines. Do not put secrets (passwords, private addresses) into the knowledge file.
+
 ## World awareness and personality
 
 New in 2.2.0, all **off by default** and switched on separately (`config.yml`, `/aifriend reload` applies them).
 
 **Server context** (`server-context`). With every request the bot gets a short picture of the server: how many players are online and, **only for the players who wrote in the current batch**, their world, biome, the hostile mobs within `radius` blocks and the time of day (morning, afternoon, evening, night, dawn) and weather **that player sees** (`"2 zombie, 1 creeper"`), so it can say "careful, a creeper is behind you". Time and weather are read per player, not once for the server: other worlds (Multiverse) have their own day and weather, and plugins such as Residence, `/ptime` or `/pweather` set them for a single player, so the player's own value wins. Worlds without a day cycle (Nether, End, custom dimensions) give none. The general time and weather are only sent when every player sees the same; the player lines carry them only where they differ. It never gets coordinates, inventories, addresses or anything about players who did not write. The picture is refreshed every `refresh-seconds` on the threads that own the data (global task and one entity task per player, so it is Folia safe) and the bot only reads the finished copy. `time`, `weather`, `world`, `biome` and `nearby-mobs` can be switched off one by one. It all goes to your AI provider with the chat, see [Privacy and data](#privacy-and-data).
+
+**How often the surroundings are mentioned.** Players do not need to hear where they are all the time. Only `share-percent` of the requests (default 10) carry the surroundings at all, the rules tell the bot to use them only when a player asks or it clearly matters, and when the players' own words are about it (where, weather, night, mobs, ...) they are always included. Set `share-percent: 100` for the old behaviour.
 
 **Mood** (`mood`). A number from -100 to 100 that fades back to calm with a half-life (`half-life-minutes`). Advancements (+8), a player's first join (+10) and killing the Ender Dragon or a Wither (+35) cheer the bot up; a death (-12), three deaths within five minutes (an extra -25) and three explosions of power 3 or more within two minutes (looks like griefing, an extra -20) bring it down. The level (thrilled, cheerful, calm, uneasy, upset) goes into the system prompt as a hint for the tone; it never changes what the bot may do. It works even when the `events` reactions are off, shows in `/aifriend status` and as `%aifriend_mood%`, and starts calm after a restart.
 
@@ -257,6 +273,8 @@ AiFriendApi api = Bukkit.getServicesManager().load(AiFriendApi.class); // null u
 | `/aifriend wake` | Wake the bot up | `aifriend.sleep` |
 | `/aifriend simulate [nocall]` | Dry run: shows persona, request, history size, token estimate, what blocks a reply and the filtered answer. `nocall` skips the provider call so it costs nothing | `aifriend.simulate` |
 | `/aifriend cost` | Token totals and estimated cost (needs `cost.enabled`) | `aifriend.cost` |
+| `/aifriend teach <fact>` | Add a fact to the bot's knowledge (needs `knowledge.enabled`) | `aifriend.teach` |
+| `/aifriend knowledge [list\|forget <number>]` | Counts, list the taught facts, remove one | `aifriend.teach` |
 
 ## Permissions
 
@@ -273,6 +291,7 @@ AiFriendApi api = Bukkit.getServicesManager().load(AiFriendApi.class); // null u
 | `aifriend.bypass-limits` | op | Not affected by cooldown and daily limits |
 | `aifriend.nickname` | everyone | `/aifriend nickname` |
 | `aifriend.bypass-supervision` | op | No friendly notes about caps lock, spam or language |
+| `aifriend.teach` | op | `/aifriend teach`, `/aifriend knowledge` |
 
 ## Configuration
 
@@ -368,6 +387,12 @@ AiFriendApi api = Bukkit.getServicesManager().load(AiFriendApi.class); // null u
 | `long-term-memory.embeddings.backend` | `none` | `none` (word matching) or a name under `provider.providers` |
 | `long-term-memory.embeddings.model` | empty | Empty = `text-embedding-3-small` / `nomic-embed-text` |
 | `long-term-memory.embeddings.base-url` | empty | Empty = the provider's `base-url` |
+| `knowledge.enabled` | `false` | Let the bot search `knowledge.txt`, taught facts and its self-description before answering |
+| `knowledge.file` | `knowledge.txt` | Your knowledge file in the plugin folder |
+| `knowledge.max-entries-per-request` | `3` | Entries added to one request (1-10) |
+| `knowledge.max-chars-per-request` | `1200` | Characters added to one request (200-6000) |
+| `knowledge.self-knowledge` | `true` | The bot can answer questions about itself |
+| `server-context.share-percent` | `10` | Share of requests that carry the surroundings at all (0-100); always when players ask about them |
 
 Example:
 
@@ -405,6 +430,7 @@ Please note:
 - API keys live only in `config.yml`, in plain text like any plugin setting. Keep that file private. Keys are masked in `/aifriend status` and removed from error messages and the log; they are sent only in request headers to the provider they belong to. Redirects are not followed.
 - Muted players (`opt-out`) are never stored or sent. The mute list (`muted-players.yml`) holds player UUIDs on your server.
 - **Long-term memory** (off by default) is the one feature that stores player data. It stores, in your own database (`storage`): the player UUID, the player name, a short note (max 120 characters, written by the model from what the player said about themselves), when it was made and last used, and optionally an embedding vector of the note. Nothing else of the chat is saved. To find the notes, **an extra request sends the recent chat lines (with player names) to your AI provider every `extract-every-exchanges` answers**, and with embeddings the notes and chat text also go to the embedding service. Tell your players. The model is told to keep nothing sensitive, notes that look like contact data are dropped by the plugin, but a model can make mistakes: review `/aifriend memory <player>` if in doubt. Players see and delete their notes with `/aifriend memory` and `/aifriend forget`, admins with `forget <player>` and `forget-all`, muting stops collection and (by default) deletes the notes, and `retention-days` removes old ones. With MariaDB the notes live on your database server and are shared by all servers that use it.
+- **Server knowledge** (off by default). The entries of `knowledge.txt`, of the taught facts and of the built-in self-description that fit the players' words (at most `max-entries-per-request`) are sent to your AI provider with the chat lines. They are read from files in the plugin folder; nothing about players is stored.
 - **World awareness** (all off by default). *Server context* sends, with every request, the time, the weather, the number of players online and, for the players who wrote, their world, biome and nearby hostile mobs (never coordinates) to your AI provider. *Relationships* store, in your own database, the player UUID, the last name, the number of answered exchanges, the first and last time and an optional nickname the player typed; `/aifriend forget` deletes it, muting the bot deletes it and stops collecting, and the nickname and level are sent to the provider with the chat lines of that player. *Mood* and *boredom* keep only counters in memory. *Chat supervision* reads public chat lines in memory only (it makes no request, stores nothing and does not look at players who muted the bot).
 - Conversation memory, limits, cost totals and the cache are kept in memory only and are lost on restart (long-term memory is the exception, see above).
 - Besides the above, the only other network calls are anonymous [bStats](https://bstats.org) statistics (turn off with `metrics: false`) and the GitHub update check (turn off with `update-check: false`). There is no other telemetry.
@@ -416,7 +442,7 @@ Please note:
 - If your `config.yml` still selects the removed provider in `provider.primary`, or has a top-level `api-key` and never chose a provider, the bot stays **inactive and sends nothing**; the log says so in one line. To continue, set `provider.primary` to `openai`, `anthropic`, `ollama` or `custom` and fill in that provider's `api-key` (see [Provider setup](#provider-setup)), then `/aifriend reload`.
 - The removed name in `provider.failover` is skipped with a warning.
 - A top-level `api-key` that is still in your file is ignored (with a warning) and never copied anywhere. Delete it after you moved the key.
-- `config-version` becomes 5; a backup `config.yml.bak-v<old>` is saved first and none of your values is changed.
+- `config-version` becomes 6; a backup `config.yml.bak-v<old>` is saved first and none of your values is changed.
 
 The exact old names are in the [CHANGELOG](CHANGELOG.md).
 

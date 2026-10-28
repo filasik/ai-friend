@@ -1,0 +1,16 @@
+// Knowledge of the AI Friend bot about YOUR server. Replace the examples below with your own facts.
+// "# Title" starts an entry, the lines below are its text. Optional "keywords:" line = extra words that find the entry.
+// Keep one entry short (a few sentences) and write what the bot should be able to answer. /aifriend reload re-reads this file.
+// To switch this on set "knowledge.enabled: true" in config.yml and run /aifriend reload.
+
+# Server address
+keywords: ip adresa connect pripojit join discord web
+The server address is example.com. Our Discord is discord.gg/example and the website is https://example.com.
+
+# Rules
+keywords: pravidla rules griefing cheat hacky
+No griefing, no stealing, no hacks. Be kind in the chat. Breaking the rules can lead to a ban.
+
+# Claiming land
+keywords: pozemek claim residence ochrana domu
+You protect your house with a golden shovel: right-click two corners. Admins can help at the spawn.

@@ -7,7 +7,7 @@
 # Config format version. Do not change: when you update the plugin, options that are new in the
 # newer version are added to this file automatically (your values stay, a backup is saved first).
 # Options of AI Friend 1.x (openai_api_key, gpt_version, ...) are renamed automatically on the first start.
-config-version: 5
+config-version: 6
 
 # Language of the plugin's own messages (commands, status): en, cs.
 # The files plugins/ai-friend/messages_<locale>.yml are yours to edit; missing keys fall back to the built-in text.
@@ -304,6 +304,9 @@ server-context:
   # The hostile mobs within radius blocks of the player, e.g. "2 zombie, 1 skeleton".
   nearby-mobs: true
   radius: 16
+  # The bot should not keep telling players where they are. Only this percent (0-100) of the requests carry the
+  # surroundings at all; when the players' own words are about it (where, weather, day or night, mobs) they always do.
+  share-percent: 10
 
 # --- Mood ---------------------------------------------------------------------------------------------
 # The bot has a mood that game events push around and that fades back to calm: advancements and boss kills cheer it up,
@@ -364,3 +367,21 @@ supervision:
   caps-percent: 70
   # The same player is told about the same problem at most every this many seconds (0-3600).
   cooldown-seconds: 60
+
+# --- Server knowledge ---------------------------------------------------------
+# A small knowledge base the bot searches before it answers, so it can tell players about YOUR server (rules, IP, shops,
+# events, how to claim land ...) and about itself (what it sees, what it stores, its commands, which features are on).
+# You fill plugins/ai-friend/knowledge.txt (an example is created on the first start); /aifriend teach <text> adds a
+# fact from in game (admins only, stored in knowledge-taught.txt). Players cannot add to it.
+# Only the few entries that fit the players' words are added to a request (no extra request, no database, plain word
+# matching), and they are sent to your AI provider like the chat lines. /aifriend reload re-reads the files.
+knowledge:
+  enabled: false
+  # File in the plugin folder: "# Title" starts an entry (or separate entries by empty lines), an optional
+  # "keywords: word1 word2" line adds search words, lines starting with // are comments. Entries over 600 characters are cut.
+  file: knowledge.txt
+  # How many entries (1-10) and how many characters (200-6000) at most go into one request.
+  max-entries-per-request: 3
+  max-chars-per-request: 1200
+  # Let the bot answer questions about itself and about this plugin (a description that ships with the plugin).
+  self-knowledge: true

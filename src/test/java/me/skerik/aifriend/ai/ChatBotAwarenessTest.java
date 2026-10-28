@@ -550,4 +550,42 @@ class ChatBotAwarenessTest {
                 Relationships.Config.defaults(), boredomOn(1), ChatSupervisor.Config.defaults())).build());
         assertEquals(0, bot.moodScore()); // a changed mood config starts fresh
     }
+
+    // ---- server knowledge ----
+
+    @Test
+    void knowledgeThatFitsTheQuestionReachesThePromptAsDataAndNothingElseDoes() throws Exception {
+        start(Awareness.defaults());
+        java.nio.file.Files.writeString(tmp.resolve("knowledge.txt"),
+                "# Server address\nThe server address is example.com.\n\n# Rules\nNo griefing.\n");
+        Settings s = TestSettings.defaults()
+                .knowledge(new me.skerik.aifriend.knowledge.ServerKnowledge.Config(true, "knowledge.txt", 3, 1200, true)).build();
+        var k = new me.skerik.aifriend.knowledge.ServerKnowledge(tmp, log);
+        k.load(s);
+        bot.reload(s);
+        bot.setKnowledge(k);
+
+        chat("Steve", "what is the server address?");
+        bot.tick();
+        List<JsonObject> d = data(last());
+        assertEquals("The server address is example.com.", d.getFirst().get("knowledge").getAsString());
+        assertEquals("Server address", d.getFirst().get("topic").getAsString());
+        assertTrue(d.getLast().has("player"), "the chat line stays last");
+        assertTrue(system(last()).contains("{\"knowledge\":...,\"topic\":...}"));
+
+        chat("Steve", "lol that was funny");
+        clock.addAndGet(5 * MIN);
+        bot.tick();
+        assertTrue(data(last()).stream().noneMatch(o -> o.has("knowledge")), "no fitting entry, no knowledge");
+    }
+
+    @Test
+    void knowledgeIsAbsentWhenTheFeatureIsOff() {
+        start(Awareness.defaults());
+        bot.setKnowledge(new me.skerik.aifriend.knowledge.ServerKnowledge(tmp, log));
+        chat("Steve", "what can you see, private messages?");
+        bot.tick();
+        assertTrue(data(last()).stream().noneMatch(o -> o.has("knowledge")));
+        assertFalse(system(last()).contains("\"knowledge\""));
+    }
 }

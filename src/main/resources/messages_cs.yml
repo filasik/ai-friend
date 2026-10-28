@@ -133,6 +133,25 @@ memory:
   forgot-relationship-player: '<prefix> <green>Bot zapomněl hráče <player>.'
   forgot-relationship-all: '<prefix> <green>Bot zapomněl všechny hráče, které znal (<count>).'
 
+# Znalosti o serveru (/aifriend teach, /aifriend knowledge). <text> je text admina, nikdy se neparsuje jako MiniMessage.
+knowledge:
+  disabled: '<prefix> <yellow>Znalosti o serveru jsou vypnuté (knowledge.enabled v config.yml).'
+  empty: '<prefix> <yellow>Použití: <white>/aifriend teach <fakt></white>'
+  too-long: '<prefix> <red>Fakt může mít nejvýše <max> znaků. Rozdělte ho na více.'
+  full: '<prefix> <red>Bot už zná <max> naučených faktů. Smažte některé příkazem /aifriend knowledge forget <číslo>.'
+  failed: '<prefix> <red>Soubor se znalostmi se nepodařilo zapsat. Podívejte se do konzole.'
+  taught: '<prefix> <green>Naučeno: <white><text>'
+  status:
+    - '<prefix> <gold>Znalosti o serveru'
+    - '<gray>  Záznamy ze souborů (knowledge.txt + naučené): <white><file>'
+    - '<gray>  Vestavěné znalosti o sobě: <white><self>'
+    - '<gray>  Naučené fakty: <white><taught></white> · vypíšete je příkazem <white>/aifriend knowledge list'
+  list-header: '<prefix> <gold>Naučené fakty (<count>)'
+  list-line: '<gray>  <number>. <white><text>'
+  list-empty: '<prefix> <gray>Zatím nic nebylo naučeno příkazem /aifriend teach.'
+  forgot: '<prefix> <green>Zapomenuto: <white><text>'
+  forget-missing: '<prefix> <yellow>Naučený fakt s tímto číslem neexistuje.'
+
 # Přátelská soukromá upozornění dohledu nad chatem (hráči se jinak nic nestane).
 supervision:
   caps: '<prefix> <gray>Pssst, tvoje zpráva je dost HLASITÁ. Zkus trochu zvolnit s caps lockem :)'

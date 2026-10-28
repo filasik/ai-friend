@@ -32,12 +32,50 @@ public final class ReplyParser {
                 JsonObject o = JsonParser.parseString(content).getAsJsonObject();
                 if (o.has("action")) return fromAction(o, botName, maxLength);
             } catch (JsonParseException | IllegalStateException ignored) {
-                // not JSON after all: treat it as plain text below
+                // broken JSON, most often cut off by the output token limit: rescue what was said, never post raw JSON
+                return salvage(content, botName, maxLength);
             }
         }
         String plain = Text.singleLine(content).replaceAll("^[\"'\\s]+|[\"'.!\\s]+$", "");
         if (plain.equalsIgnoreCase(LEGACY_STOP)) return Reply.SLEEP;
         return say(content, botName, maxLength);
+    }
+
+    private static final java.util.regex.Pattern TEXT_FIELD =
+            java.util.regex.Pattern.compile("\"text\"\\s*:\\s*\"");
+    private static final java.util.regex.Pattern ACTION_SLEEP =
+            java.util.regex.Pattern.compile("\"action\"\\s*:\\s*\"(sleep|stop)\"", java.util.regex.Pattern.CASE_INSENSITIVE);
+
+    /** Text of a JSON answer that is cut off or malformed: the {@code text} value up to where it ends, else nothing. */
+    private static Reply salvage(String content, String botName, int maxLength) {
+        if (ACTION_SLEEP.matcher(content).find()) return Reply.SLEEP;
+        var m = TEXT_FIELD.matcher(content);
+        if (!m.find()) return Reply.NONE;
+        StringBuilder out = new StringBuilder();
+        for (int i = m.end(); i < content.length(); i++) {
+            char c = content.charAt(i);
+            if (c == '"') break;
+            if (c != '\\' || i + 1 >= content.length()) {
+                out.append(c);
+                continue;
+            }
+            char n = content.charAt(++i);
+            switch (n) {
+                case 'n', 't', 'r' -> out.append(' ');
+                case 'u' -> {
+                    if (i + 4 < content.length()) {
+                        try {
+                            out.append((char) Integer.parseInt(content.substring(i + 1, i + 5), 16));
+                            i += 4;
+                        } catch (NumberFormatException e) {
+                            return say(out.toString(), botName, maxLength);
+                        }
+                    }
+                }
+                default -> out.append(n);
+            }
+        }
+        return say(out.toString(), botName, maxLength);
     }
 
     private static Reply fromAction(JsonObject o, String botName, int maxLength) {
@@ -46,6 +84,7 @@ public final class ReplyParser {
             case "sleep", "stop" -> Reply.SLEEP;
             case "say" -> o.has("text") && o.get("text").isJsonPrimitive()
                     ? say(o.get("text").getAsString(), botName, maxLength) : Reply.NONE;
+            case "skip", "pass", "silent", "none" -> Reply.NONE; // the model chose not to join this exchange
             default -> Reply.NONE;
         };
     }
