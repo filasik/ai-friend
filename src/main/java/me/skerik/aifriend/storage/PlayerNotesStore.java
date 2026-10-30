@@ -178,6 +178,57 @@ public final class PlayerNotesStore {
         });
     }
 
+    /**
+     * Deletes these notes, but only those that belong to {@code player} (an id from the model is never trusted alone).
+     *
+     * @return the number of deleted notes
+     */
+    public CompletableFuture<Integer> deleteIds(UUID player, Collection<Long> noteIds) {
+        if (noteIds.isEmpty()) return CompletableFuture.completedFuture(0);
+        List<Long> ids = List.copyOf(new LinkedHashSet<>(noteIds));
+        return db.supply(c -> {
+            int removed = 0;
+            try (PreparedStatement ps = c.prepareStatement("DELETE FROM " + TABLE + " WHERE id = ? AND player_uuid = ?")) {
+                for (long id : ids) {
+                    ps.setLong(1, id);
+                    ps.setString(2, player.toString());
+                    removed += ps.executeUpdate();
+                }
+            }
+            return removed;
+        });
+    }
+
+    /**
+     * Deletes the notes of one player that are about the given topic (at most {@code max}, best match first): cosine
+     * similarity of at least {@code minCosine} for notes with a compatible embedding, otherwise a keyword overlap of
+     * at least {@code minKeywords}.
+     *
+     * @return the number of deleted notes
+     */
+    public CompletableFuture<Integer> deleteMatching(UUID player, float @Nullable [] queryEmbedding, @Nullable String embeddingModel,
+                                                     String topic, double minCosine, double minKeywords, int max) {
+        return db.supply(c -> {
+            Set<String> queryWords = words(topic);
+            record Hit(long id, double score) {
+            }
+            List<Hit> hits = new ArrayList<>();
+            for (Row r : load(c, "WHERE player_uuid = ?", ps -> ps.setString(1, player.toString()))) {
+                double score = score(r, queryEmbedding, embeddingModel, queryWords);
+                if (score >= (comparable(r, queryEmbedding, embeddingModel) ? minCosine : minKeywords)) hits.add(new Hit(r.note.id(), score));
+            }
+            hits.sort(Comparator.comparingDouble(Hit::score).reversed());
+            int removed = 0;
+            try (PreparedStatement ps = c.prepareStatement("DELETE FROM " + TABLE + " WHERE id = ?")) {
+                for (Hit h : hits.subList(0, Math.min(max, hits.size()))) {
+                    ps.setLong(1, h.id());
+                    removed += ps.executeUpdate();
+                }
+            }
+            return removed;
+        });
+    }
+
     /** @return the number of deleted notes */
     public CompletableFuture<Integer> deleteAll() {
         return db.supply(c -> {
@@ -234,18 +285,25 @@ public final class PlayerNotesStore {
         }
         List<Scored> scored = new ArrayList<>(rows.size());
         for (Row r : rows) {
-            double score;
-            if (query != null && r.embedding != null && model != null && model.equals(r.model) && r.embedding.length == query.length) {
-                score = Math.max(0, cosine(query, r.embedding));
-            } else {
-                score = keywordScore(words(r.note.text()), queryWords);
-            }
+            double score = score(r, query, model, queryWords);
             scored.add(new Scored(r.note, score));
         }
         scored.sort(Comparator.comparingDouble(Scored::score).reversed()
                 .thenComparing(Comparator.comparingLong((Scored s) -> s.note.lastUsedAt()).reversed())
                 .thenComparing(Comparator.comparingLong((Scored s) -> s.note.id()).reversed()));
         return scored.stream().limit(k).map(Scored::note).toList();
+    }
+
+    /** Cosine similarity when the note has a compatible embedding, keyword overlap otherwise. */
+    private static double score(Row r, float @Nullable [] query, @Nullable String model, Set<String> queryWords) {
+        return query != null && r.embedding != null && comparable(r, query, model)
+                ? Math.max(0, cosine(query, r.embedding))
+                : keywordScore(words(r.note.text()), queryWords);
+    }
+
+    /** The note's embedding was made by the same model with the same size as the query embedding. */
+    private static boolean comparable(Row r, float @Nullable [] query, @Nullable String model) {
+        return query != null && r.embedding != null && model != null && model.equals(r.model) && r.embedding.length == query.length;
     }
 
     static double cosine(float[] a, float[] b) {

@@ -28,7 +28,7 @@ Every player can switch me off for themselves with /aifriend mute (and back on w
 
 # What I remember
 keywords: pamatuješ pamatujes pamet paměť zapamatuj zapomen zapomeň poznámky poznamky memory remember forget notes
-If long-term memory is on at this server, I remember short notes about what players told me about themselves. Players see them with /aifriend memory and delete them with /aifriend forget. I note things like what someone builds or likes when they tell me. Without it I only remember the last few messages.
+If long-term memory is on at this server, I remember short notes about what players told me about themselves. Players see them with /aifriend memory and delete them with /aifriend forget, or simply tell me in chat to forget something and I delete that note. I note things like what someone builds or likes when they tell me. Without it I only remember the last few messages.
 
 # Nickname
 keywords: přezdívka prezdivka oslovuj oslovovat nickname call me name

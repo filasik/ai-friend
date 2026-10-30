@@ -129,6 +129,57 @@ public final class LongTermMemory {
         }
     }
 
+    /** Notes at least this similar (cosine) to a topic the player asked to forget are deleted. */
+    static final double FORGET_MIN_COSINE = 0.6;
+    /** Without embeddings: share of the note's words that occur in the topic. */
+    static final double FORGET_MIN_KEYWORDS = 0.4;
+    static final int FORGET_MAX_NOTES = 3;
+
+    /**
+     * Deletes the notes of the player that match what they asked to forget. Blocking; failures are logged, never thrown.
+     *
+     * @return the number of deleted notes
+     */
+    public int forgetTopic(UUID player, String topic) {
+        try {
+            float[] vector = embedOrNull(topic);
+            return await(store.deleteMatching(player, vector, vector == null || embedder == null ? null : embedder.model(), topic,
+                    FORGET_MIN_COSINE, FORGET_MIN_KEYWORDS, FORGET_MAX_NOTES));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return 0;
+        } catch (ExecutionException | TimeoutException | RuntimeException e) {
+            log.warning("Long-term memory: cannot delete a note the player asked to forget (" + e.getClass().getSimpleName() + ")");
+            return 0;
+        }
+    }
+
+    /** Deletes these notes of the player (ids of other players' notes are ignored). Blocking; 0 on any problem. */
+    public int forgetNotes(UUID player, Collection<Long> noteIds) {
+        try {
+            return await(store.deleteIds(player, noteIds));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return 0;
+        } catch (ExecutionException | TimeoutException | RuntimeException e) {
+            log.warning("Long-term memory: cannot delete a note the player asked to forget (" + e.getClass().getSimpleName() + ")");
+            return 0;
+        }
+    }
+
+    /** All notes of the player, newest first. Blocking; empty on any problem. */
+    public List<Note> notesNow(UUID player) {
+        try {
+            return await(store.listFor(player));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return List.of();
+        } catch (ExecutionException | TimeoutException | RuntimeException e) {
+            log.warning("Long-term memory: cannot read notes (" + e.getClass().getSimpleName() + ")");
+            return List.of();
+        }
+    }
+
     /** Daily housekeeping (retention-days and max-notes-per-player). */
     public CompletableFuture<Integer> prune() {
         return store.prune(config.maxNotesPerPlayer(), config.retentionDays(), clock.getAsLong());

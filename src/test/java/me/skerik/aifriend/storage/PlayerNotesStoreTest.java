@@ -154,4 +154,17 @@ class PlayerNotesStoreTest {
         store.add(steve, "Steve", evil, null, null, 1).join();
         assertEquals(List.of(evil), texts(store.listFor(steve).join()));
     }
+
+    @Test
+    void deleteMatchingRemovesOnlyTheTopicOfThatPlayer() {
+        store.add(steve, "Steve", "Staví velký hrad", null, null, 1000).join();
+        store.add(steve, "Steve", "Miluje redstone farmy", null, null, 2000).join();
+        store.add(alex, "Alex", "Staví velký hrad", null, null, 3000).join();
+
+        assertEquals(1, store.deleteMatching(steve, null, null, "staví hrad", 0.6, 0.4, 3).join());
+        assertEquals(List.of("Miluje redstone farmy"), texts(store.listFor(steve).join()));
+        assertEquals(1, store.listFor(alex).join().size());
+        // an unrelated topic deletes nothing
+        assertEquals(0, store.deleteMatching(steve, null, null, "zzz qqq", 0.6, 0.4, 3).join());
+    }
 }

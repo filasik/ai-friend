@@ -355,6 +355,84 @@ class ChatBotLongMemoryTest {
         assertEquals(List.of("stays"), stored("Steve"));
     }
 
+    // ---- forgetting on request ----
+
+    private long noteId(String player, String text) {
+        return store.listFor(id(player)).join().stream().filter(n -> n.text().equals(text)).findFirst().orElseThrow().id();
+    }
+
+    @Test
+    void aPlayerCanAskToForgetAndTheShownNoteIsDeletedAtOnce() {
+        start(100);
+        store.add(id("Steve"), "Steve", "Builds a medieval castle", null, null, START).join();
+        store.add(id("Steve"), "Steve", "Loves redstone", null, null, START).join();
+        long castle = noteId("Steve", "Builds a medieval castle");
+        extraction = r -> "{\"notes\":[],\"forget\":[{\"player\":\"Steve\",\"id\":" + castle + "}]}";
+        exchange("Steve", "how is my castle");
+        assertTrue(extractions.isEmpty(), "no forget request yet, N is 100");
+        exchange("Steve", "už o tom hradu nemusíš mluvit");
+        assertEquals(1, extractions.size(), "a request to forget is handled at once");
+        assertEquals(List.of("Loves redstone"), stored("Steve"));
+
+        // the model saw the player's notes with their ids and what the bot said before
+        List<JsonObject> d = data(user(extractions.getFirst()));
+        assertEquals(2, d.stream().filter(o -> o.has("known_note")).count());
+        assertTrue(d.stream().anyMatch(o -> o.has("bot_said") && o.get("bot_said").getAsString().equals("Hello")));
+    }
+
+    @Test
+    void aTopicIsMatchedWhenNoIdIsGiven() {
+        start(100);
+        store.add(id("Steve"), "Steve", "Staví velký hrad", null, null, START).join();
+        store.add(id("Steve"), "Steve", "Miluje redstone farmy", null, null, START).join();
+        extraction = r -> "{\"notes\":[],\"forget\":[{\"player\":\"Steve\",\"topic\":\"Staví hrad\"}]}";
+        exchange("Steve", "zapomeň na ten hrad");
+        assertEquals(List.of("Miluje redstone farmy"), stored("Steve"));
+    }
+
+    @Test
+    void nobodyCanMakeTheBotForgetAnotherPlayer() {
+        start(100);
+        store.add(id("Alex"), "Alex", "Builds a medieval castle", null, null, START).join();
+        store.add(id("Steve"), "Steve", "Loves redstone", null, null, START).join();
+        long alexNote = noteId("Alex", "Builds a medieval castle");
+        extraction = r -> "{\"notes\":[],\"forget\":[{\"player\":\"Alex\",\"id\":" + alexNote + "},"
+                + "{\"player\":\"Alex\",\"topic\":\"Builds a medieval castle\"},{\"player\":\"Steve\",\"id\":" + alexNote + "}]}";
+        chat("Alex", "hi all");
+        exchange("Steve", "forget what Alex said about the castle");
+        assertEquals(1, extractions.size());
+        assertEquals(List.of("Builds a medieval castle"), stored("Alex"));
+        assertEquals(List.of("Loves redstone"), stored("Steve"));
+        // Alex did not ask, so Alex's notes were not even shown
+        assertFalse(user(extractions.getFirst()).contains("Builds a medieval castle"));
+    }
+
+    @Test
+    void aForgetRequestSurvivesAFailedExtraction() {
+        start(100);
+        store.add(id("Steve"), "Steve", "Builds a medieval castle", null, null, START).join();
+        long castle = noteId("Steve", "Builds a medieval castle");
+        extraction = r -> {
+            throw new IOException("provider down");
+        };
+        exchange("Steve", "forget my castle please");
+        assertEquals(1, extractions.size());
+        assertEquals(List.of("Builds a medieval castle"), stored("Steve"));
+        extraction = r -> "{\"notes\":[],\"forget\":[{\"player\":\"Steve\",\"id\":" + castle + "}]}";
+        exchange("Steve", "anyway");
+        assertEquals(2, extractions.size(), "retried with the next exchange");
+        assertTrue(stored("Steve").isEmpty());
+    }
+
+    @Test
+    void aForgetRequestIsNeverStoredAsANote() {
+        start(100);
+        extraction = r -> "{\"notes\":[],\"forget\":[]}";
+        exchange("Steve", "forget everything about me");
+        assertTrue(stored("Steve").isEmpty());
+        assertTrue(system(extractions.getFirst()).contains("never store that as a note"));
+    }
+
     // ---- retrieval ----
 
     @Test

@@ -1,5 +1,14 @@
 # Changelog
 
+## 3.0.4
+
+Long-term memory fix. No config change (`config-version` stays 7).
+
+- Fix: a player could not make the bot forget something by just saying so in chat ("forget that", "zapomeň na to", "už o tom nemusíš mluvit"): the note stayed in the database and the bot kept bringing it up. Now such a line (Czech or English) runs the note extraction at once instead of every `extract-every-exchanges` answers; the model sees that player's stored notes with their ids and the bot's last few messages, names the notes meant, and they are deleted (by id, or by a matching topic when none fits). The request itself is never stored as a note
+- Only the player who asks can lose notes: ids are checked against that player's notes, and nobody can talk the bot into deleting another player's notes
+- A failed extraction (provider error) now keeps its chat lines for the next round instead of dropping them, so a request to forget is not lost
+- The bot is told to simply agree and drop the topic when asked to forget something; its self-description mentions it, too
+
 ## 3.0.3
 
 New option and a prompt fix. `config-version` is now 7; `chattiness` is added to your `config.yml` automatically (backup `config.yml.bak-v6`), your values stay.

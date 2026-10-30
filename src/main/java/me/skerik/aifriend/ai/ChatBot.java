@@ -5,6 +5,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -111,6 +112,7 @@ public final class ChatBot {
     /** Three notes of 120 characters in a language that tokenizes badly (Czech) plus the JSON do not fit into 300. */
     static final int EXTRACT_MAX_TOKENS = 600;
     static final int MAX_PENDING_LINES = 60;
+    static final int RECENT_REPLIES = 3;
     static final int MAX_KNOWN_NAMES = 5000;
     static final int MAX_RELATIONS = 5;
 
@@ -149,6 +151,10 @@ public final class ChatBot {
     private final ConcurrentLinkedQueue<ChatLine> pendingNotes = new ConcurrentLinkedQueue<>();
     private final AtomicInteger answeredExchanges = new AtomicInteger();
     private final AtomicBoolean extracting = new AtomicBoolean();
+    /** A queued line sounds like "forget that": extract as soon as possible, not only every N-th exchange. */
+    private final AtomicBoolean forgetPending = new AtomicBoolean();
+    /** The bot's latest posted messages, newest last: context for "forget that" in the extraction request. */
+    private final ConcurrentLinkedQueue<String> recentReplies = new ConcurrentLinkedQueue<>();
     private volatile @Nullable LongTermMemory longMemory;
     private volatile @Nullable ServerKnowledge knowledge;
     private final Relationships relationships = new Relationships();
@@ -235,7 +241,10 @@ public final class ChatBot {
     /** Switches long-term memory on (non-null) or off (null); called by the plugin once the database is ready or gone. */
     public void setLongMemory(@Nullable LongTermMemory memory) {
         this.longMemory = memory;
-        if (memory == null) pendingNotes.clear();
+        if (memory == null) {
+            pendingNotes.clear();
+            forgetPending.set(false);
+        }
     }
 
     /** The server knowledge (file, taught facts, self-description); null until the plugin has loaded it. */
@@ -628,10 +637,14 @@ public final class ChatBot {
         if (ltm == null || !ltm.config().enabled()) return;
         for (ChatLine line : lines) {
             UUID id = knownNames.get(line.player().toLowerCase(Locale.ROOT));
-            if (id != null && !isMuted(id)) pendingNotes.add(line);
+            if (id == null || isMuted(id)) continue;
+            pendingNotes.add(line);
+            if (NoteExtractor.mentionsForgetting(line.text())) forgetPending.set(true);
         }
         while (pendingNotes.size() > MAX_PENDING_LINES) pendingNotes.poll();
-        if (answeredExchanges.incrementAndGet() % ltm.config().extractEveryExchanges() == 0) {
+        // a request to forget is handled at once (and retried with the next exchange when skipped), not only every N-th
+        // exchange, so the note is not used again meanwhile
+        if (answeredExchanges.incrementAndGet() % ltm.config().extractEveryExchanges() == 0 || forgetPending.get()) {
             scheduler.runAsync(() -> extractNotes(ltm));
         }
     }
@@ -654,6 +667,7 @@ public final class ChatBot {
      */
     private void extractNotes(LongTermMemory ltm) {
         if (!extracting.compareAndSet(false, true)) return;
+        List<ChatLine> lines = new ArrayList<>();
         try {
             Runtime r = rt;
             long now = clock.getAsLong();
@@ -663,22 +677,37 @@ public final class ChatBot {
                 log.fine("Long-term memory: server-wide AI limit reached; extraction skipped");
                 return;
             }
-            List<ChatLine> lines = new ArrayList<>();
             ChatLine line;
             while ((line = pendingNotes.poll()) != null) {
                 UUID id = knownNames.get(line.player().toLowerCase(Locale.ROOT));
                 if (id != null && !isMuted(id)) lines.add(line);
             }
+            forgetPending.set(false);
             if (lines.isEmpty()) return;
             Map<String, String> names = new LinkedHashMap<>();
             for (ChatLine l : lines) names.putIfAbsent(l.player().toLowerCase(Locale.ROOT), l.player());
-            ProviderResult res = complete(r, NoteExtractor.messages(lines), EXTRACT_MAX_TOKENS, true, null, at);
+            // the stored notes of players who seem to ask for forgetting, so the model can name exactly which ones
+            Map<Long, UUID> shown = new HashMap<>();
+            List<NoteExtractor.KnownNote> known = new ArrayList<>();
+            Set<UUID> asking = new HashSet<>();
+            for (ChatLine l : lines) {
+                UUID id = knownNames.get(l.player().toLowerCase(Locale.ROOT));
+                if (id == null || !NoteExtractor.mentionsForgetting(l.text()) || !asking.add(id)) continue;
+                for (PlayerNotesStore.Note n : ltm.notesNow(id)) {
+                    shown.put(n.id(), id);
+                    known.add(new NoteExtractor.KnownNote(n.id(), names.get(l.player().toLowerCase(Locale.ROOT)), n.text()));
+                }
+            }
+            List<String> botSaid = asking.isEmpty() ? List.of() : List.copyOf(recentReplies);
+            ProviderResult res = complete(r, NoteExtractor.messages(lines, known, botSaid), EXTRACT_MAX_TOKENS, true, null, at);
             List<NoteExtractor.Candidate> candidates = NoteExtractor.parse(res.text(), names);
-            if (candidates.isEmpty() && NoteExtractor.unexpectedlyEmpty(res.text())) {
+            List<NoteExtractor.Forget> forgets = NoteExtractor.parseForgets(res.text(), names);
+            if (candidates.isEmpty() && forgets.isEmpty() && NoteExtractor.unexpectedlyEmpty(res.text())) {
                 // nothing usable although the model did not say "nothing to keep": wrong format, filtered or cut off
                 log.warning("Long-term memory: no note could be read from the model's answer (" + res.text().length()
                         + " characters). If this repeats, check that the provider answers with the requested JSON.");
             }
+            forget(ltm, forgets, shown, asking);
             for (NoteExtractor.Candidate c : candidates) {
                 UUID id = knownNames.get(c.player().toLowerCase(Locale.ROOT));
                 if (id == null || isMuted(id)) continue;
@@ -686,12 +715,52 @@ public final class ChatBot {
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-        } catch (IOException | RuntimeException e) {
+        } catch (IOException e) {
+            // the provider failed: keep the lines (above all a request to forget) for the next round
+            requeue(lines);
+            log.warning("Long-term memory: note extraction failed (" + e.getClass().getSimpleName()
+                    + (e.getMessage() == null ? "" : ": " + e.getMessage()) + ")");
+        } catch (RuntimeException e) {
             log.warning("Long-term memory: note extraction failed (" + e.getClass().getSimpleName()
                     + (e.getMessage() == null ? "" : ": " + e.getMessage()) + ")");
         } finally {
             extracting.set(false);
         }
+    }
+
+    /** Puts lines of a failed extraction back in front of newer ones (still capped at {@link #MAX_PENDING_LINES}). */
+    private void requeue(List<ChatLine> lines) {
+        if (lines.isEmpty()) return;
+        List<ChatLine> newer = new ArrayList<>();
+        ChatLine l;
+        while ((l = pendingNotes.poll()) != null) newer.add(l);
+        pendingNotes.addAll(lines);
+        pendingNotes.addAll(newer);
+        while (pendingNotes.size() > MAX_PENDING_LINES) pendingNotes.poll();
+        if (pendingNotes.stream().anyMatch(x -> NoteExtractor.mentionsForgetting(x.text()))) forgetPending.set(true);
+    }
+
+    /**
+     * Deletes what players asked to forget, before new notes are stored. Only players whose own line sounds like a
+     * request to forget ({@code asking}) lose notes, so nobody can talk the model into deleting another player's notes.
+     * A note id counts only when that note was shown to the model as a note of the same player; a topic is matched
+     * against the player's notes.
+     */
+    private void forget(LongTermMemory ltm, List<NoteExtractor.Forget> forgets, Map<Long, UUID> shown, Set<UUID> asking) {
+        Map<UUID, List<Long>> ids = new LinkedHashMap<>();
+        Map<UUID, Integer> removed = new LinkedHashMap<>();
+        Map<UUID, String> who = new HashMap<>();
+        for (NoteExtractor.Forget f : forgets) {
+            UUID id = knownNames.get(f.player().toLowerCase(Locale.ROOT));
+            if (id == null || !asking.contains(id)) continue;
+            who.putIfAbsent(id, f.player());
+            if (f.id() < 0) removed.merge(id, ltm.forgetTopic(id, f.topic()), Integer::sum);
+            else if (id.equals(shown.get(f.id()))) ids.computeIfAbsent(id, k -> new ArrayList<>()).add(f.id());
+        }
+        ids.forEach((id, list) -> removed.merge(id, ltm.forgetNotes(id, list), Integer::sum));
+        removed.forEach((id, n) -> {
+            if (n > 0) log.info("Long-term memory: deleted " + n + " note(s) of " + who.get(id) + " at their request");
+        });
     }
 
     /** Sends the request, accounts the tokens (limits, cost) and parses the answer. Blocking. */
@@ -742,6 +811,8 @@ public final class ChatBot {
         if (result.isEmpty()) return result;
         String text = result.get();
         lastReply = text;
+        recentReplies.add(text);
+        while (recentReplies.size() > RECENT_REPLIES) recentReplies.poll();
         r.boredom.touch(clock.getAsLong());
         // the history shows the model its own answers in the format it must keep using (plain text here makes JSON mode drift)
         if (r.memory.isActive()) r.memory.add(p.memoryText, Reply.asJson(text));
