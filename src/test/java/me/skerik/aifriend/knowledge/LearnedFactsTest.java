@@ -55,7 +55,7 @@ class LearnedFactsTest {
         assertTrue(observe(TWO, Proposal.known(candidate.id(), "Alex"), Proposal.known(candidate.id(), "Bob")).size() == 1);
         Fact pending = facts.list(Status.PENDING).getFirst();
         assertEquals(2, pending.mentions());
-        assertEquals(List.of("Steve", "Alex"), pending.players());
+        assertEquals(List.of("Steve", "Alex", "Bob"), pending.players(), "Bob is listed although the round counted once");
         assertTrue(facts.list(Status.CANDIDATE).isEmpty());
     }
 

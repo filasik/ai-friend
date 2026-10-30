@@ -11,7 +11,7 @@ final class SelfKnowledge {
     private SelfKnowledge() {
     }
 
-    /** One entry listing the features that are switched on right now, in the knowledge file format. */
+    /** Two entries listing the features that are switched on and off right now, in the knowledge file format. */
     static String status(Settings s) {
         ChatFeatures f = s.features();
         var aw = f.awareness();
@@ -30,10 +30,12 @@ final class SelfKnowledge {
         add(aw.supervision().enabled(), "friendly private hints about caps lock, spam and language", on, off);
         add(f.knowledge().learningOn(), "learning general facts about this server from the chat (an admin approves each one before I use it)", on, off);
         add(f.optOut().enabled(), "players can mute me with /aifriend mute", on, off);
-        return "# Which features are on at this server right now\n"
-                + "keywords: features funkce zapnute zapnuto vypnuto umis umíš co umis what can you do schopnosti nastaveni settings"
-                + " pamatujes pamatuješ pamet paměť\n"
-                + "On: " + (on.isEmpty() ? "none of the optional features" : String.join("; ", on)) + ". "
+        // two entries: one list of every feature is longer than an entry may be (KnowledgeBase.MAX_ENTRY_CHARS)
+        String keywords = "keywords: features funkce zapnute zapnuto vypnuto umis umíš co umis what can you do schopnosti nastaveni"
+                + " settings pamatujes pamatuješ pamet paměť\n";
+        return "# Which features are on at this server right now\n" + keywords
+                + "On: " + (on.isEmpty() ? "none of the optional features" : String.join("; ", on)) + ".\n\n"
+                + "# Which features are off at this server right now\n" + keywords
                 + "Off: " + (off.isEmpty() ? "nothing" : String.join("; ", off)) + ".\n";
     }
 

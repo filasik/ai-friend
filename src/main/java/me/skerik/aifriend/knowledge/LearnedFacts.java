@@ -199,7 +199,16 @@ public final class LearnedFacts {
                 if (knownElsewhere.test(text) || facts.size() >= MAX_FACTS && !dropOldestCandidate()) continue;
                 f = new Fact(nextId++, text, Status.CANDIDATE, 0, List.of(), now, now, "", 0);
             }
-            if (!counted.add(f.id())) continue;
+            if (!counted.add(f.id())) {
+                // a second player for a fact already counted in this round: no extra mention, but the admin sees who
+                Fact c = facts.get(f.id());
+                if (c != null && c.players().stream().noneMatch(n -> n.equalsIgnoreCase(p.player()))) {
+                    facts.put(c.id(), new Fact(c.id(), c.text(), c.status(), c.mentions(), withPlayer(c.players(), p.player()),
+                            c.firstSeen(), c.lastSeen(), c.decidedBy(), c.decidedAt()));
+                    changed = true;
+                }
+                continue;
+            }
             changed = true;
             if (f.status() != Status.CANDIDATE && f.status() != Status.PENDING) {
                 facts.put(f.id(), new Fact(f.id(), f.text(), f.status(), f.mentions() + 1, withPlayer(f.players(), p.player()),

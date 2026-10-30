@@ -134,4 +134,15 @@ class NoteExtractorTest {
         assertTrue(both.contains("\"notes\"") && both.contains("server_facts") && both.contains("known_fact"));
         for (String s : List.of(notes, facts, both)) assertTrue(s.contains("extract long-term facts"), s);
     }
+
+    @Test
+    void idReferencesUnderAnInventedKeyStillCount() {
+        // seen live with Claude Haiku 5.5: confirmations of known facts under keys of its own
+        for (String key : List.of("server_confirmations", "fact_hits", "known_fact_hits")) {
+            String json = "{\"notes\":[],\"forget\":[],\"server_facts\":[],\"" + key + "\":[{\"id\":1,\"player\":\"Steve\"}]}";
+            assertEquals(List.of(me.skerik.aifriend.knowledge.LearnedFacts.Proposal.known(1, "Steve")), NoteExtractor.parseFacts(json, NAMES), key);
+        }
+        // ids of notes or forget requests are never taken as facts
+        assertTrue(NoteExtractor.parseFacts("{\"forget\":[{\"player\":\"Steve\",\"id\":3}],\"server_facts\":[]}", NAMES).isEmpty());
+    }
 }

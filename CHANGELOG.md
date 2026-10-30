@@ -1,5 +1,14 @@
 # Changelog
 
+## 3.1.1
+
+Fixes found in a live test with Claude Haiku 5.5. No config change (`config-version` stays 8).
+
+- Fix: learning from the chat often missed the second mention of a fact, so nothing ever reached the review: the model reported confirmations of known facts under keys of its own (`fact_hits`, `server_confirmations`...). The rules now show the exact format, and id references under another key are accepted too
+- Fix: a player who mentioned a fact in the same round as another player was missing from the fact's player list in the review
+- Fix: the model no longer writes comments ("nothing new here") as facts
+- Fix: warning at every start that the bot's self-description entry is longer than 600 characters and was cut (the list of features on/off is now two entries)
+
 ## 3.1.0
 
 The bot can learn general facts about your server from the chat, and admins approve them. `config-version` is now 8; `knowledge.learning` is added to your `config.yml` automatically (backup `config.yml.bak-v7`), your values stay. Off by default.

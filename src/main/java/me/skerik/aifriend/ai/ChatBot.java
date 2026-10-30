@@ -113,6 +113,8 @@ public final class ChatBot {
     /** Three notes of 120 characters in a language that tokenizes badly (Czech) plus the JSON do not fit into 300. */
     static final int EXTRACT_MAX_TOKENS = 600;
     static final int MAX_PENDING_LINES = 60;
+    /** Developer switch ({@code -Daifriend.debug=true}): logs the raw extraction answers. Off in production. */
+    static final boolean DEBUG = Boolean.getBoolean("aifriend.debug");
     static final int RECENT_REPLIES = 3;
     /** Collected server facts that fit the chat and go into the extraction request (so repeats are recognised). */
     static final int MAX_KNOWN_FACTS = 8;
@@ -738,6 +740,7 @@ public final class ChatBot {
             NoteExtractor.Request request = new NoteExtractor.Request(lines, ltm != null, known, botSaid, learner != null,
                     knownFacts, adminKnows);
             ProviderResult res = complete(r, NoteExtractor.messages(request), EXTRACT_MAX_TOKENS, true, null, at);
+            if (DEBUG) log.info("[debug] extraction answer: " + res.text());
             List<NoteExtractor.Candidate> candidates = ltm == null ? List.of() : NoteExtractor.parse(res.text(), names);
             List<NoteExtractor.Forget> forgets = ltm == null ? List.of() : NoteExtractor.parseForgets(res.text(), names);
             List<LearnedFacts.Proposal> proposals = learner == null ? List.of() : NoteExtractor.parseFacts(res.text(), names);

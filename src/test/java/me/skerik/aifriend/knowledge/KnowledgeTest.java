@@ -117,9 +117,13 @@ class KnowledgeTest {
     void theFeatureStatusFollowsTheConfiguration() {
         ServerKnowledge k = new ServerKnowledge(tmp, LOG);
         k.load(enabled());
-        var on = k.retrieve("which features are on, what can you do", enabled().features().knowledge());
-        assertTrue(on.stream().anyMatch(e -> e.title().startsWith("Which features are on")
-                && e.text().contains("Off:") && e.text().contains("long-term memory")));
+        var found = k.retrieve("which features are on or off, what can you do", enabled().features().knowledge());
+        assertTrue(found.stream().anyMatch(e -> e.title().startsWith("Which features are off")
+                && e.text().startsWith("Off:") && e.text().contains("long-term memory")), found.toString());
+        assertTrue(found.stream().anyMatch(e -> e.title().startsWith("Which features are on") && e.text().startsWith("On:")),
+                found.toString());
+        // every feature switched on still fits into an entry (no cut, no warning)
+        assertTrue(SelfKnowledge.status(enabled()).length() < 2 * KnowledgeBase.MAX_ENTRY_CHARS);
     }
 
     @Test
