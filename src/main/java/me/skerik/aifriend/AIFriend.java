@@ -33,6 +33,7 @@ import me.skerik.aifriend.config.Messages;
 import me.skerik.aifriend.config.Settings;
 import me.skerik.aifriend.listener.ChatListener;
 import me.skerik.aifriend.listener.GameEventListener;
+import me.skerik.aifriend.gui.LearnedGuiListener;
 import me.skerik.aifriend.util.Banner;
 import me.skerik.aifriend.util.Stats;
 import me.skerik.aifriend.util.UpdateChecker;
@@ -220,6 +221,7 @@ public final class AIFriend extends JavaPlugin implements Listener {
         context = new Context(this, scheduler, settings, messages, bot);
         getServer().getPluginManager().registerEvents(new ChatListener(bot), this);
         getServer().getPluginManager().registerEvents(new GameEventListener(bot), this);
+        getServer().getPluginManager().registerEvents(new LearnedGuiListener(), this);
         ContextCollector collector = new ContextCollector(scheduler, () -> settings.features().awareness().context(),
                 System::currentTimeMillis);
         bot.setContextSource(collector::snapshot);
@@ -282,6 +284,13 @@ public final class AIFriend extends JavaPlugin implements Listener {
                     else if (n > 0) getLogger().info("Long-term memory: cleanup removed " + n + " old note(s)");
                 });
             }
+            // learned server facts: candidates nobody mentioned for forget-candidates-after-days
+            ServerKnowledge k = bot.knowledge();
+            var kc = settings.features().knowledge();
+            if (k != null && kc.learningOn()) {
+                int n = k.learned().prune(kc.learning());
+                if (n > 0) getLogger().info("Knowledge learning: cleanup removed " + n + " old candidate(s)");
+            }
         }, 5L * 60 * 20, 24L * 60 * 60 * 20));
 
         if (settings.updateCheck()) {
@@ -335,6 +344,18 @@ public final class AIFriend extends JavaPlugin implements Listener {
             scheduler.runForEntity(player, () -> player.sendMessage(ctx.messages().get("update.available",
                     Messages.text("version", String.valueOf(u.newerVersion())),
                     Messages.text("url", String.valueOf(u.url())))), null);
+        }
+        ServerKnowledge k = ctx.bot.knowledge();
+        var kc = ctx.settings().features().knowledge();
+        if (k != null && kc.learningOn() && kc.learning().notifyAdmins() && player.hasPermission("aifriend.teach")) {
+            // the store's lock may be held by a file write: count off the main thread
+            scheduler.runAsync(() -> {
+                int pending = k.learned().count(me.skerik.aifriend.knowledge.LearnedFacts.Status.PENDING);
+                if (pending > 0) {
+                    scheduler.runForEntity(player, () -> player.sendMessage(ctx.messages().get("learned.pending-on-join",
+                            Messages.text("count", Integer.toString(pending)))), null);
+                }
+            });
         }
     }
 

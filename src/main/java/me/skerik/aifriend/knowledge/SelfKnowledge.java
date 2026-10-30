@@ -28,6 +28,7 @@ final class SelfKnowledge {
         add(aw.relationships().enabled(), "getting to know players (nicknames)", on, off);
         add(aw.boredom().enabled(), "starting a conversation when the chat is quiet", on, off);
         add(aw.supervision().enabled(), "friendly private hints about caps lock, spam and language", on, off);
+        add(f.knowledge().learningOn(), "learning general facts about this server from the chat (an admin approves each one before I use it)", on, off);
         add(f.optOut().enabled(), "players can mute me with /aifriend mute", on, off);
         return "# Which features are on at this server right now\n"
                 + "keywords: features funkce zapnute zapnuto vypnuto umis umíš co umis what can you do schopnosti nastaveni settings"

@@ -1,5 +1,15 @@
 # Changelog
 
+## 3.1.0
+
+The bot can learn general facts about your server from the chat, and admins approve them. `config-version` is now 8; `knowledge.learning` is added to your `config.yml` automatically (backup `config.yml.bak-v7`), your values stay. Off by default.
+
+- New: **learning from the chat** (`knowledge.learning.*`, needs `knowledge.enabled`): the bot picks up general facts about the server that players state ("keys and chests are opened at /truhly", "the shops are at /warp shop"). It uses the extraction request of long-term memory (one request for notes and facts when both are on) and works without long-term memory and without a database. A fact is a candidate until it came up in `min-mentions` separate looks (default 2), then it waits for review and admins with `aifriend.teach` get a message (also on join). Similar wordings count as one fact, and what `knowledge.txt` or the taught facts already say is not proposed
+- New: **`/aifriend learned`** review GUI: tabs for waiting, approved, disabled, rejected and candidate facts; left click approves, right click rejects (never learned again, nor anything similar), shift + left disables, shift + right deletes (may be learned again). Every click is cancelled, nothing can be taken out. From the console and in chat: `list [status]` with clickable buttons, `approve|disable|reject|delete <id>`, `edit <id> <text>`
+- Only approved facts reach the answers (searched like `knowledge.txt`); `auto-approve` exists but is off and not recommended
+- Stored in `knowledge-learned.json` (text, status, mention count, last five player names, dates, who decided); candidates are dropped after `forget-candidates-after-days` without a mention
+- `/aifriend knowledge` shows the learned counts; the bot's self-description mentions the feature
+
 ## 3.0.4
 
 Long-term memory fix. No config change (`config-version` stays 7).

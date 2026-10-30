@@ -33,6 +33,10 @@
 - [ ] 2.2.0: privacy text (README, README.cs, Modrinth, Spigot) matches what server context, relationships and supervision send/store; `forget`, `forget-all` and muting delete the relationship record
 - [ ] 2.2.0: new permissions `aifriend.nickname` and `aifriend.bypass-supervision` in `paper-plugin.yml` and the README tables; `%aifriend_relationship%`, `%aifriend_nickname%`, real `%aifriend_mood%` verified with a real PlaceholderAPI
 - [ ] 2.2.0: `CHANGELOG.md` has a `## 2.2.0` heading; `modrinthId` in `gradle.properties` is the Modrinth project ID (`LbfapIpl`), not the slug
+- [ ] 3.1.0: `knowledge.learning` is OFF in a fresh `config.yml`; upgrade from a 3.0.x `config.yml`: `config-version: 8`, `knowledge.learning` added inside the existing `knowledge` section with comments, own values kept, `config.yml.bak-v7` written
+- [ ] 3.1.0: live test with a real provider: two players state the same server fact in two extraction rounds -> admin message, `/aifriend learned` GUI shows it; approve -> the bot answers with it; reject -> the same and a similar wording are never proposed again; delete -> may be learned again; works with long-term memory off (no database file created)
+- [ ] 3.1.0: GUI: every click and drag cancelled (shift-click, number keys, drag into the bottom inventory), nothing can be taken out; paging and tabs; works on Folia-style threads (actions run async, GUI refresh on the player's thread)
+- [ ] 3.1.0: `CHANGELOG.md` has a `## 3.1.0` heading; privacy text (README, README.cs, Modrinth, Spigot) mentions `knowledge-learned.json` and the player names stored with facts
 - [ ] `CHANGELOG.md`, `README.md`, `README.cs.md`, `docs/modrinth.md`, `docs/spigot.bbcode.txt` match the real code (Paper-only note present)
 - [ ] Icon, banner (`scripts/render-assets.sh`), at least 2 gallery images (illustrations labelled as such, unless real screenshots)
 - [ ] README: commands, permissions, configuration, privacy, license

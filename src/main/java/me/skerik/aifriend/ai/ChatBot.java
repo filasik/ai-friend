@@ -50,6 +50,7 @@ import me.skerik.aifriend.config.Awareness;
 import me.skerik.aifriend.config.ChatFeatures;
 import me.skerik.aifriend.config.Settings;
 import me.skerik.aifriend.knowledge.KnowledgeBase;
+import me.skerik.aifriend.knowledge.LearnedFacts;
 import me.skerik.aifriend.knowledge.ServerKnowledge;
 import me.skerik.aifriend.longmemory.LongTermMemory;
 import me.skerik.aifriend.storage.PlayerNotesStore;
@@ -113,6 +114,8 @@ public final class ChatBot {
     static final int EXTRACT_MAX_TOKENS = 600;
     static final int MAX_PENDING_LINES = 60;
     static final int RECENT_REPLIES = 3;
+    /** Collected server facts that fit the chat and go into the extraction request (so repeats are recognised). */
+    static final int MAX_KNOWN_FACTS = 8;
     static final int MAX_KNOWN_NAMES = 5000;
     static final int MAX_RELATIONS = 5;
 
@@ -630,23 +633,41 @@ public final class ChatBot {
         collectNotes(lines);
     }
 
-    /** Queues the lines for long-term notes and, every N-th batch, extracts them in the background. */
+    /**
+     * Queues the lines for the extraction (long-term notes and/or learning server facts) and, every N-th batch, runs it
+     * in the background. N is long-term memory's {@code extract-every-exchanges}, or learning's when memory is off.
+     */
     private void collectNotes(List<ChatLine> lines) {
         if (lines.isEmpty()) return;
-        LongTermMemory ltm = longMemory;
-        if (ltm == null || !ltm.config().enabled()) return;
+        LongTermMemory ltm = notesMemory();
+        ServerKnowledge learner = learner();
+        if (ltm == null && learner == null) return;
         for (ChatLine line : lines) {
             UUID id = knownNames.get(line.player().toLowerCase(Locale.ROOT));
             if (id == null || isMuted(id)) continue;
             pendingNotes.add(line);
-            if (NoteExtractor.mentionsForgetting(line.text())) forgetPending.set(true);
+            if (ltm != null && NoteExtractor.mentionsForgetting(line.text())) forgetPending.set(true);
         }
         while (pendingNotes.size() > MAX_PENDING_LINES) pendingNotes.poll();
+        int every = ltm != null ? ltm.config().extractEveryExchanges()
+                : rt.settings.features().knowledge().learning().extractEveryExchanges();
         // a request to forget is handled at once (and retried with the next exchange when skipped), not only every N-th
         // exchange, so the note is not used again meanwhile
-        if (answeredExchanges.incrementAndGet() % ltm.config().extractEveryExchanges() == 0 || forgetPending.get()) {
-            scheduler.runAsync(() -> extractNotes(ltm));
+        if (answeredExchanges.incrementAndGet() % every == 0 || forgetPending.get()) {
+            scheduler.runAsync(this::extractNotes);
         }
+    }
+
+    /** Long-term memory when it is switched on, else null. */
+    private @Nullable LongTermMemory notesMemory() {
+        LongTermMemory ltm = longMemory;
+        return ltm != null && ltm.config().enabled() ? ltm : null;
+    }
+
+    /** The server knowledge when learning from the chat is switched on, else null. */
+    private @Nullable ServerKnowledge learner() {
+        ServerKnowledge k = knowledge;
+        return k != null && rt.settings.features().knowledge().learningOn() ? k : null;
     }
 
     /** Every player who took part in an answered exchange gets to know the bot a little better. */
@@ -665,10 +686,13 @@ public final class ChatBot {
      * lines stay queued for the next round) when the bot is off, asleep, in backoff or rate limited. Never throws and
      * never touches the answering state, so a failure here cannot slow the bot down.
      */
-    private void extractNotes(LongTermMemory ltm) {
+    private void extractNotes() {
         if (!extracting.compareAndSet(false, true)) return;
         List<ChatLine> lines = new ArrayList<>();
         try {
+            LongTermMemory ltm = notesMemory();
+            ServerKnowledge learner = learner();
+            if (ltm == null && learner == null) return;
             Runtime r = rt;
             long now = clock.getAsLong();
             if (!r.settings.enabled() || r.provider.isEmpty() || now < sleepUntil || now < retryAt) return;
@@ -691,6 +715,7 @@ public final class ChatBot {
             List<NoteExtractor.KnownNote> known = new ArrayList<>();
             Set<UUID> asking = new HashSet<>();
             for (ChatLine l : lines) {
+                if (ltm == null) break;
                 UUID id = knownNames.get(l.player().toLowerCase(Locale.ROOT));
                 if (id == null || !NoteExtractor.mentionsForgetting(l.text()) || !asking.add(id)) continue;
                 for (PlayerNotesStore.Note n : ltm.notesNow(id)) {
@@ -699,20 +724,37 @@ public final class ChatBot {
                 }
             }
             List<String> botSaid = asking.isEmpty() ? List.of() : List.copyOf(recentReplies);
-            ProviderResult res = complete(r, NoteExtractor.messages(lines, known, botSaid), EXTRACT_MAX_TOKENS, true, null, at);
-            List<NoteExtractor.Candidate> candidates = NoteExtractor.parse(res.text(), names);
-            List<NoteExtractor.Forget> forgets = NoteExtractor.parseForgets(res.text(), names);
-            if (candidates.isEmpty() && forgets.isEmpty() && NoteExtractor.unexpectedlyEmpty(res.text())) {
+            // collected server facts and the admin's knowledge that fit this chat, so repeats are recognised
+            List<NoteExtractor.KnownFact> knownFacts = new ArrayList<>();
+            List<String> adminKnows = new ArrayList<>();
+            if (learner != null) {
+                StringBuilder query = new StringBuilder();
+                for (ChatLine l : lines) query.append(l.text()).append(' ');
+                for (LearnedFacts.Fact f : learner.learned().related(query.toString(), MAX_KNOWN_FACTS)) {
+                    knownFacts.add(new NoteExtractor.KnownFact(f.id(), f.text()));
+                }
+                adminKnows.addAll(learner.adminRelated(query.toString(), r.settings.features().knowledge()));
+            }
+            NoteExtractor.Request request = new NoteExtractor.Request(lines, ltm != null, known, botSaid, learner != null,
+                    knownFacts, adminKnows);
+            ProviderResult res = complete(r, NoteExtractor.messages(request), EXTRACT_MAX_TOKENS, true, null, at);
+            List<NoteExtractor.Candidate> candidates = ltm == null ? List.of() : NoteExtractor.parse(res.text(), names);
+            List<NoteExtractor.Forget> forgets = ltm == null ? List.of() : NoteExtractor.parseForgets(res.text(), names);
+            List<LearnedFacts.Proposal> proposals = learner == null ? List.of() : NoteExtractor.parseFacts(res.text(), names);
+            if (candidates.isEmpty() && forgets.isEmpty() && proposals.isEmpty() && NoteExtractor.unexpectedlyEmpty(res.text())) {
                 // nothing usable although the model did not say "nothing to keep": wrong format, filtered or cut off
                 log.warning("Long-term memory: no note could be read from the model's answer (" + res.text().length()
                         + " characters). If this repeats, check that the provider answers with the requested JSON.");
             }
-            forget(ltm, forgets, shown, asking);
-            for (NoteExtractor.Candidate c : candidates) {
-                UUID id = knownNames.get(c.player().toLowerCase(Locale.ROOT));
-                if (id == null || isMuted(id)) continue;
-                ltm.remember(id, c.player(), c.note());
+            if (ltm != null) {
+                forget(ltm, forgets, shown, asking);
+                for (NoteExtractor.Candidate c : candidates) {
+                    UUID id = knownNames.get(c.player().toLowerCase(Locale.ROOT));
+                    if (id == null || isMuted(id)) continue;
+                    ltm.remember(id, c.player(), c.note());
+                }
             }
+            if (learner != null) learn(learner, proposals, r.settings.features().knowledge().learning());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         } catch (IOException e) {
@@ -726,6 +768,23 @@ public final class ChatBot {
         } finally {
             extracting.set(false);
         }
+    }
+
+    /** Counts the proposed server facts; tells admins about facts that now wait for review. */
+    private void learn(ServerKnowledge learner, List<LearnedFacts.Proposal> proposals, LearnedFacts.Config config) {
+        if (proposals.isEmpty()) return;
+        List<LearnedFacts.Fact> promoted = learner.learned().observe(proposals, config, learner::knownByAdmin);
+        boolean approved = false;
+        for (LearnedFacts.Fact f : promoted) {
+            if (f.status() == LearnedFacts.Status.APPROVED) {
+                approved = true;
+                log.info("Knowledge learning: approved automatically #" + f.id() + ": " + f.text());
+            } else if (config.notifyAdmins()) {
+                notifier.tellPermission("aifriend.teach", "learned.new",
+                        Map.of("id", Integer.toString(f.id()), "text", f.text(), "mentions", Integer.toString(f.mentions())));
+            }
+        }
+        if (approved) learner.refreshLearned();
     }
 
     /** Puts lines of a failed extraction back in front of newer ones (still capped at {@link #MAX_PENDING_LINES}). */

@@ -7,7 +7,7 @@
 # Config format version. Do not change: when you update the plugin, options that are new in the
 # newer version are added to this file automatically (your values stay, a backup is saved first).
 # Options of AI Friend 1.x (openai_api_key, gpt_version, ...) are renamed automatically on the first start.
-config-version: 7
+config-version: 8
 
 # Language of the plugin's own messages (commands, status): en, cs.
 # The files plugins/ai-friend/messages_<locale>.yml are yours to edit; missing keys fall back to the built-in text.
@@ -392,3 +392,24 @@ knowledge:
   max-chars-per-request: 1200
   # Let the bot answer questions about itself and about this plugin (a description that ships with the plugin).
   self-knowledge: true
+  # Learning from the chat (new in 3.1.0, needs knowledge.enabled). The bot picks up general facts about THIS server that
+  # players state in the chat ("keys and chests are opened at /truhly", "the shops are at /warp shop") and offers them to
+  # admins for review: /aifriend learned opens a GUI (aifriend.teach). Nothing is used in answers before an admin
+  # approves it. Rejected facts (and anything similar) are never proposed again; deleted ones may be learned again.
+  # Kept in knowledge-learned.json. It uses the same extra request as long-term memory (recent chat lines with player
+  # names go to your AI provider), so it costs one request every extract-every-exchanges answered exchanges.
+  learning:
+    enabled: false
+    # Look for facts after this many answered exchanges (1-1000). When long-term-memory is on, its own value is used
+    # instead and both are found in the same request.
+    extract-every-exchanges: 6
+    # A fact must come up in this many separate looks (1-50) before admins are asked about it. Until then it is a
+    # "candidate". Higher = fewer one-off claims, slower learning.
+    min-mentions: 2
+    # true = use facts without review as soon as they reach min-mentions. NOT recommended: players could teach the bot
+    # wrong or harmful "facts".
+    auto-approve: false
+    # Candidates that nobody mentioned again for this many days (1-3650) are dropped.
+    forget-candidates-after-days: 30
+    # Tell admins (aifriend.teach) online and on join when a fact waits for review.
+    notify-admins: true

@@ -112,4 +112,26 @@ class NoteExtractorTest {
             assertFalse(NoteExtractor.mentionsForgetting(s), s);
         }
     }
+
+    @Test
+    void parsesServerFactsByIdOrTextAndDropsSensitiveOrForeignOnes() {
+        String json = "{\"server_facts\":[{\"id\":4,\"player\":\"steve\"},{\"fact\":\"Shops are at /warp shop\",\"player\":\"Alex\"},"
+                + "{\"fact\":\"Write the admin at admin@example.com\",\"player\":\"Alex\"},{\"fact\":\"Shops are at /warp shop\",\"player\":\"Nobody\"}]}";
+        assertEquals(List.of(me.skerik.aifriend.knowledge.LearnedFacts.Proposal.known(4, "Steve"),
+                me.skerik.aifriend.knowledge.LearnedFacts.Proposal.fresh("Shops are at /warp shop", "Alex")),
+                NoteExtractor.parseFacts(json, NAMES));
+        assertTrue(NoteExtractor.parseFacts("{\"notes\":[]}", NAMES).isEmpty());
+        assertFalse(NoteExtractor.unexpectedlyEmpty("{\"server_facts\":[]}"));
+    }
+
+    @Test
+    void theRulesFollowTheSwitchedOnParts() {
+        String notes = NoteExtractor.system(true, false);
+        String facts = NoteExtractor.system(false, true);
+        String both = NoteExtractor.system(true, true);
+        assertFalse(notes.contains("server_facts"));
+        assertFalse(facts.contains("\"notes\"") || facts.contains("known_note"));
+        assertTrue(both.contains("\"notes\"") && both.contains("server_facts") && both.contains("known_fact"));
+        for (String s : List.of(notes, facts, both)) assertTrue(s.contains("extract long-term facts"), s);
+    }
 }

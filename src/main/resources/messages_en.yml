@@ -152,6 +152,73 @@ knowledge:
   list-empty: '<prefix> <gray>Nothing was taught with /aifriend teach yet.'
   forgot: '<prefix> <green>Forgot: <white><text>'
   forget-missing: '<prefix> <yellow>There is no taught fact with that number.'
+  status-learned: '<gray>  Learned from the chat: <white><approved></white> approved, <yellow><pending></yellow> waiting for review, <white><candidates></white> candidates, <white><rejected></white> rejected · <click:run_command:''/aifriend learned''><aqua>/aifriend learned</aqua></click>'
+  status-learning-off: '<gray>  Learning from the chat: off (knowledge.learning.enabled)'
+
+# Server facts the bot learned from the chat (knowledge.learning), reviewed by admins with /aifriend learned.
+learned:
+  disabled: '<prefix> <yellow>Learning from the chat is switched off (knowledge.enabled and knowledge.learning.enabled in config.yml).'
+  new: '<prefix> <gold>The bot learned something (#<id>, heard <mentions>×): <white><text></white> <click:run_command:''/aifriend learned''><aqua>[review]</aqua></click>'
+  pending-on-join: '<prefix> <gold><count></gold> <yellow>fact(s) the bot learned from the chat wait for your review. <click:run_command:''/aifriend learned''><aqua>[open]</aqua></click>'
+  missing: '<prefix> <yellow>There is no learned fact with that number.'
+  edit-invalid: '<prefix> <red>A fact must have <min> to <max> characters.'
+  done:
+    approve: '<prefix> <green>Approved #<id>, the bot uses it now: <white><text>'
+    disable: '<prefix> <gray>Disabled #<id> (not used, not proposed again): <white><text>'
+    reject: '<prefix> <red>Rejected #<id>, it will never be learned again: <white><text>'
+    delete: '<prefix> <gray>Deleted #<id> (it may be learned again): <white><text>'
+    edit: '<prefix> <green>Changed #<id>: <white><text>'
+  status:
+    pending: 'Waiting for review'
+    approved: 'Approved'
+    disabled: 'Disabled'
+    rejected: 'Rejected'
+    candidate: 'Candidates'
+  list-header: '<prefix> <gold><status> (<count>)'
+  list-line: '<gray>  #<id> <white><text></white> <dark_gray>(<mentions>×, <players>)</dark_gray> <actions>'
+  list-more: '<gray>  ... and <count> more (see the GUI: /aifriend learned)'
+  list-empty: '<prefix> <gray>Nothing here: <status>.'
+  list-tabs: '<gray>  Other lists: /aifriend learned list pending|approved|disabled|rejected|candidate'
+  button:
+    approve: '<green>[✔]'
+    disable: '<gray>[⏸]'
+    reject: '<red>[✘]'
+    delete: '<dark_red>[🗑]'
+  button-hover:
+    approve: '<green>Approve: the bot uses this fact in answers'
+    disable: '<gray>Disable: not used, not proposed again (approve it later)'
+    reject: '<red>Reject: never learned again (also nothing similar)'
+    delete: '<dark_red>Delete completely: may be learned again later'
+  gui:
+    title: '<dark_gray>Learned: <status> (<page>/<pages>)'
+    fact-name: '<yellow>#<id>'
+    text-line: '<white><text>'
+    mentions: '<gray>Heard <aqua><mentions>×</aqua> · from <white><players>'
+    seen: '<gray>First <white><first></white> · last <white><last>'
+    decided: '<gray>Decided by <white><by></white> at <white><at>'
+    hint-approve: '<green>Left click: approve'
+    hint-reject: '<red>Right click: reject (never again)'
+    hint-disable: '<gray>Shift + left click: disable'
+    hint-delete: '<dark_red>Shift + right click: delete'
+    hint-edit: '<dark_gray>Change the text: /aifriend learned edit <id> <text>'
+    tab: '<gold><status> <gray>(<count>)'
+    tab-lore:
+      pending: ['<gray>Facts heard often enough,', '<gray>waiting for your decision.']
+      approved: ['<gray>Used by the bot in answers.']
+      disabled: ['<gray>Kept, but not used', '<gray>and not proposed again.']
+      rejected: ['<gray>Never learned again,', '<gray>nor anything similar.']
+      candidate: ['<gray>Heard fewer than min-mentions times.', '<gray>You can already decide here.']
+    prev: '<yellow>« Previous page'
+    next: '<yellow>Next page »'
+    empty: '<gray>Nothing here'
+    help-name: '<gold>How it works'
+    help:
+      - '<gray>The bot picks up general facts about'
+      - '<gray>the server from the chat. Only approved'
+      - '<gray>facts are used in its answers.'
+      - ''
+      - '<green>Left</green> <gray>approve · <red>Right</red> <gray>reject'
+      - '<gray>Shift+left disable · <dark_red>Shift+right</dark_red> <gray>delete'
 
 # Friendly private notes of the chat supervision (nothing else happens to the player).
 supervision:

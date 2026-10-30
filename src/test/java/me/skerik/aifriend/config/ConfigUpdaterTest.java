@@ -123,7 +123,7 @@ class ConfigUpdaterTest {
 
     @Test
     void bundledConfigDeclaresAVersion() throws Exception {
-        assertEquals(7, bundled().getInt(ConfigUpdater.VERSION_KEY, 0));
+        assertEquals(8, bundled().getInt(ConfigUpdater.VERSION_KEY, 0));
     }
 
     private static final java.util.List<String> NEW_SECTIONS = java.util.List.of("provider", "personas", "memory",
@@ -160,7 +160,7 @@ class ConfigUpdaterTest {
             assertTrue(user.isConfigurationSection(section), section + " missing");
             assertFalse(user.getComments(section).isEmpty(), section + " has no comment");
         }
-        assertEquals(7, user.getInt(ConfigUpdater.VERSION_KEY));
+        assertEquals(8, user.getInt(ConfigUpdater.VERSION_KEY));
         assertTrue(out.contains("Conversation memory"), out);
         assertTrue(out.contains("Rate limits"), out);
     }
@@ -256,7 +256,7 @@ class ConfigUpdaterTest {
         YamlConfiguration defaults = bundled();
         assertTrue(ConfigUpdater.merge(user, defaults) > 0);
         String out = user.saveToString();
-        assertEquals(7, user.getInt(ConfigUpdater.VERSION_KEY));
+        assertEquals(8, user.getInt(ConfigUpdater.VERSION_KEY));
         assertTrue(out.contains("# my provider note"), out);
         assertEquals("openai", user.getString("provider.primary"));
         assertEquals("sk-openai-abcdefgh", user.getString("provider.providers.openai.api-key"));
@@ -300,7 +300,7 @@ class ConfigUpdaterTest {
         YamlConfiguration defaults = bundled();
         assertTrue(ConfigUpdater.merge(user, defaults) > 0);
         String out = user.saveToString();
-        assertEquals(7, user.getInt(ConfigUpdater.VERSION_KEY));
+        assertEquals(8, user.getInt(ConfigUpdater.VERSION_KEY));
         assertEquals(45, user.getInt("interval-seconds"));
         assertTrue(user.getBoolean("long-term-memory.enabled"));
         assertEquals(9, user.getInt("long-term-memory.retrieval-top-k"));
@@ -388,9 +388,43 @@ class ConfigUpdaterTest {
         ConfigUpdater.flagRetiredProxy(user);
         ConfigUpdater.merge(user, bundled());
         assertEquals("proxy", user.getString("provider.primary"));
-        assertEquals(7, user.getInt(ConfigUpdater.VERSION_KEY));
+        assertEquals(8, user.getInt(ConfigUpdater.VERSION_KEY));
         Settings s = settingsOf(user, new java.util.ArrayList<>());
         assertTrue(s.provider().retiredProxy());
         assertTrue(inactive(s), "the openai key must not make the bot send chat elsewhere");
+    }
+
+    // ---- learning from the chat (config-version 8) ----
+
+    /** A 3.0.x install: knowledge switched on with own values, nothing of learning. */
+    private static final String V7 = """
+            config-version: 7
+            knowledge:
+              enabled: true
+              # my own comment
+              max-entries-per-request: 5
+            """;
+
+    @Test
+    void version7ConfigGetsTheLearningSectionOffByDefaultInsideItsKnowledgeSection() throws Exception {
+        YamlConfiguration user = load(V7);
+        YamlConfiguration defaults = bundled();
+        assertTrue(ConfigUpdater.merge(user, defaults) > 0);
+        assertEquals(8, user.getInt(ConfigUpdater.VERSION_KEY));
+        assertTrue(user.getBoolean("knowledge.enabled"));
+        assertEquals(5, user.getInt("knowledge.max-entries-per-request"));
+        assertTrue(user.isConfigurationSection("knowledge.learning"));
+        assertFalse(user.getBoolean("knowledge.learning.enabled"), "learning must be off by default");
+        assertFalse(user.getBoolean("knowledge.learning.auto-approve"));
+        assertEquals(2, user.getInt("knowledge.learning.min-mentions"));
+        assertFalse(user.getComments("knowledge.learning").isEmpty());
+        String out = user.saveToString();
+        assertTrue(out.contains("my own comment"), out);
+
+        Logger log = Logger.getLogger("ConfigUpdaterTest");
+        log.setLevel(Level.OFF);
+        var k = Settings.load(load(out), log).features().knowledge();
+        assertEquals(me.skerik.aifriend.knowledge.LearnedFacts.Config.defaults(), k.learning());
+        assertFalse(k.learningOn());
     }
 }

@@ -26,7 +26,7 @@ It reads the public chat and posts short replies as a bot of your own name, lang
 - **Your choice of AI.** OpenAI (default), Anthropic Claude, a local Ollama server or any OpenAI-compatible endpoint, with a failover chain and an optional answer cache.
 - **Chat intelligence, all optional and off by default.** Personas, conversation memory, rate and daily limits, cost estimate, reply filter, direct questions (`/ai`, `@Name`), per-player mute and reactions to game events.
 - **Long-term memory** (optional, off by default). The bot remembers what players told it about themselves, in SQLite or MariaDB, and players can list and delete their notes.
-- **Server knowledge.** Fill `knowledge.txt` with your rules, IP, shops and events (or add facts in game with `/aifriend teach`) and the bot answers about your server; it also knows what it sees, stores and can do. Off by default.
+- **Server knowledge.** Fill `knowledge.txt` with your rules, IP, shops and events (or add facts in game with `/aifriend teach`) and the bot answers about your server; it also knows what it sees, stores and can do. Optionally it **learns general server facts from the chat**, and admins approve them in a GUI first. Off by default.
 - **Fits the chat.** The bot does not answer every time: it stays quiet when players talk among themselves and joins in when spoken to. It picks up the tone, slang and atmosphere of the recent chat instead of sounding like a manual, and does not keep telling players where they are.
 - **Integrations.** A public API (`AiFriendResponseEvent`, `AiFriendApi`) and PlaceholderAPI placeholders such as `%aifriend_mood%`.
 - **Yours to shape.** Bot name, reply language and a free-text `personalization` (your website, jokes, house rules, ...).
@@ -202,6 +202,16 @@ How it works: the words of the recent chat are matched against the entries in me
 
 **Privacy:** the entries that fit a question are sent to your AI provider together with the chat lines. Do not put secrets (passwords, private addresses) into the knowledge file.
 
+### Learning from the chat
+
+Off by default (`knowledge.learning.enabled`, needs `knowledge.enabled`). The bot picks up **general facts about your server** that players state in the chat, like "keys and chests are opened at /truhly" or "the shops are at /warp shop", and offers them to admins. **Nothing is used in answers before an admin approves it.**
+
+- It uses the same extra request as [long-term memory](#long-term-memory) (every `extract-every-exchanges` answered exchanges; with long-term memory on, its value counts and notes and facts come from one request). The model gets the chat lines, the collected facts that fit them (with ids, so a repeated mention is recognised) and the entries of your `knowledge.txt`/taught facts that fit (so it does not propose what you already wrote). Facts about single players stay [notes](#long-term-memory); opinions, jokes, questions and "learn this!" orders do not count as facts.
+- A new fact is a **candidate** until it came up in `min-mentions` (default 2) separate looks; then it **waits for review** and admins with `aifriend.teach` get a chat message (also on join while something waits; `notify-admins`). Similar wordings count as the same fact.
+- **`/aifriend learned`** opens a GUI (players) or lists what waits (console). Tabs: waiting, approved, disabled, rejected, candidates. **Left click approves** (the bot uses it from now on), **right click rejects** (never learned again, nor anything similar), **shift + left disables** (kept, not used, not proposed again; approve it later), **shift + right deletes** (gone, may be learned again). Every click in the GUI is cancelled; nothing can be taken out. The same works as commands with clickable buttons: `/aifriend learned list [pending|approved|disabled|rejected|candidate]`, `approve|disable|reject|delete <id>` and `edit <id> <text>` to fix the wording before approving.
+- Approved facts are searched like the rest of the knowledge (`max-entries-per-request`, `max-chars-per-request`) and go into the request as `{"knowledge":...}` lines when they fit the chat.
+- Stored in `plugins/ai-friend/knowledge-learned.json` (text, status, how often and from which last five player names it was heard, dates, who decided). Candidates nobody mentioned for `forget-candidates-after-days` (30) are dropped. `auto-approve: true` skips the review; not recommended, players could teach the bot wrong or harmful "facts".
+
 ## World awareness and personality
 
 New in 2.2.0, all **off by default** and switched on separately (`config.yml`, `/aifriend reload` applies them).
@@ -276,6 +286,7 @@ AiFriendApi api = Bukkit.getServicesManager().load(AiFriendApi.class); // null u
 | `/aifriend cost` | Token totals and estimated cost (needs `cost.enabled`) | `aifriend.cost` |
 | `/aifriend teach <fact>` | Add a fact to the bot's knowledge (needs `knowledge.enabled`) | `aifriend.teach` |
 | `/aifriend knowledge [list\|forget <number>]` | Counts, list the taught facts, remove one | `aifriend.teach` |
+| `/aifriend learned` | Review GUI for facts learned from the chat (console: list); also `list [status]`, `approve\|disable\|reject\|delete <id>`, `edit <id> <text>` | `aifriend.teach` |
 
 ## Permissions
 
@@ -292,7 +303,7 @@ AiFriendApi api = Bukkit.getServicesManager().load(AiFriendApi.class); // null u
 | `aifriend.bypass-limits` | op | Not affected by cooldown and daily limits |
 | `aifriend.nickname` | everyone | `/aifriend nickname` |
 | `aifriend.bypass-supervision` | op | No friendly notes about caps lock, spam or language |
-| `aifriend.teach` | op | `/aifriend teach`, `/aifriend knowledge` |
+| `aifriend.teach` | op | `/aifriend teach`, `/aifriend knowledge`, `/aifriend learned` and the messages about facts waiting for review |
 
 ## Configuration
 
@@ -432,7 +443,7 @@ Please note:
 - API keys live only in `config.yml`, in plain text like any plugin setting. Keep that file private. Keys are masked in `/aifriend status` and removed from error messages and the log; they are sent only in request headers to the provider they belong to. Redirects are not followed.
 - Muted players (`opt-out`) are never stored or sent. The mute list (`muted-players.yml`) holds player UUIDs on your server.
 - **Long-term memory** (off by default) is the one feature that stores player data. It stores, in your own database (`storage`): the player UUID, the player name, a short note (max 120 characters, written by the model from what the player said about themselves), when it was made and last used, and optionally an embedding vector of the note. Nothing else of the chat is saved. To find the notes, **an extra request sends the recent chat lines (with player names) to your AI provider every `extract-every-exchanges` answers**, and with embeddings the notes and chat text also go to the embedding service. Tell your players. The model is told to keep nothing sensitive, notes that look like contact data are dropped by the plugin, but a model can make mistakes: review `/aifriend memory <player>` if in doubt. Players see and delete their notes with `/aifriend memory` and `/aifriend forget` or by asking the bot in chat to forget something (that extraction request also sends the asking player's stored notes and the bot's last few messages to your provider), admins with `forget <player>` and `forget-all`, muting stops collection and (by default) deletes the notes, and `retention-days` removes old ones. With MariaDB the notes live on your database server and are shared by all servers that use it.
-- **Server knowledge** (off by default). The entries of `knowledge.txt`, of the taught facts and of the built-in self-description that fit the players' words (at most `max-entries-per-request`) are sent to your AI provider with the chat lines. They are read from files in the plugin folder; nothing about players is stored.
+- **Server knowledge** (off by default). The entries of `knowledge.txt`, of the taught facts and of the built-in self-description that fit the players' words (at most `max-entries-per-request`) are sent to your AI provider with the chat lines. They are read from files in the plugin folder; nothing about players is stored. *Learning from the chat* (`knowledge.learning`, off by default) uses the extraction request (recent chat lines with player names go to your AI provider, plus the collected facts and your knowledge entries that fit) and stores in `knowledge-learned.json` each fact with the last five player names that mentioned it, so admins can judge where it came from; deleting a fact removes them.
 - **World awareness** (all off by default). *Server context* sends, with every request, the time, the weather, the number of players online and, for the players who wrote, their world, biome and nearby hostile mobs (never coordinates) to your AI provider. *Relationships* store, in your own database, the player UUID, the last name, the number of answered exchanges, the first and last time and an optional nickname the player typed; `/aifriend forget` deletes it, muting the bot deletes it and stops collecting, and the nickname and level are sent to the provider with the chat lines of that player. *Mood* and *boredom* keep only counters in memory. *Chat supervision* reads public chat lines in memory only (it makes no request, stores nothing and does not look at players who muted the bot).
 - Conversation memory, limits, cost totals and the cache are kept in memory only and are lost on restart (long-term memory is the exception, see above).
 - Besides the above, the only other network calls are anonymous [bStats](https://bstats.org) statistics (turn off with `metrics: false`) and the GitHub update check (turn off with `update-check: false`). There is no other telemetry.

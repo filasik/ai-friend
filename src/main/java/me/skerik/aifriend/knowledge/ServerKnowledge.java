@@ -26,13 +26,23 @@ import org.jspecify.annotations.Nullable;
 public final class ServerKnowledge {
 
     /** Config section {@code knowledge}. Default: off. */
-    public record Config(boolean enabled, String file, int maxEntries, int maxChars, boolean selfKnowledge) {
+    public record Config(boolean enabled, String file, int maxEntries, int maxChars, boolean selfKnowledge,
+                         LearnedFacts.Config learning) {
 
         public static final String DEFAULT_FILE = "knowledge.txt";
         public static final String TAUGHT_FILE = "knowledge-taught.txt";
 
+        public Config(boolean enabled, String file, int maxEntries, int maxChars, boolean selfKnowledge) {
+            this(enabled, file, maxEntries, maxChars, selfKnowledge, LearnedFacts.Config.defaults());
+        }
+
         public static Config defaults() {
             return new Config(false, DEFAULT_FILE, 3, 1200, true);
+        }
+
+        /** Learning from the chat needs the knowledge it feeds. */
+        public boolean learningOn() {
+            return enabled && learning.enabled();
         }
 
         public static Config load(@Nullable ConfigurationSection s, Logger log) {
@@ -45,7 +55,8 @@ public final class ServerKnowledge {
             return new Config(Cfg.bool(s, "enabled", false), file,
                     Cfg.bounded(s, "max-entries-per-request", 1, 10, 3, log),
                     Cfg.bounded(s, "max-chars-per-request", 200, 6000, 1200, log),
-                    Cfg.bool(s, "self-knowledge", true));
+                    Cfg.bool(s, "self-knowledge", true),
+                    LearnedFacts.Config.load(s == null ? null : s.getConfigurationSection("learning"), log));
         }
     }
 
@@ -55,25 +66,39 @@ public final class ServerKnowledge {
     private final Path folder;
     private final Logger log;
     private volatile KnowledgeBase base = KnowledgeBase.empty();
+    /** knowledge.txt + taught facts: what the admin wrote, so learning does not propose it again. */
+    private volatile KnowledgeBase adminBase = KnowledgeBase.empty();
+    private final LearnedFacts learned;
+    private volatile int learnedEntries;
+    private volatile @Nullable Settings lastSettings;
     private volatile int fileEntries;
     private volatile int selfEntries;
     private final Object taughtLock = new Object();
 
     public ServerKnowledge(Path folder, Logger log) {
+        this(folder, log, System::currentTimeMillis);
+    }
+
+    public ServerKnowledge(Path folder, Logger log, java.util.function.LongSupplier clock) {
         this.folder = folder;
         this.log = log;
+        this.learned = new LearnedFacts(folder, log, clock);
     }
 
     /** (Re)reads every source. Creates the sample file when the knowledge file does not exist yet. Blocking. */
-    public void load(Settings settings) {
+    public synchronized void load(Settings settings) {
+        lastSettings = settings;
         ChatFeatures f = settings.features();
         Config c = f.knowledge();
         if (!c.enabled()) {
             base = KnowledgeBase.empty();
+            adminBase = KnowledgeBase.empty();
             fileEntries = 0;
             selfEntries = 0;
+            learnedEntries = 0;
             return;
         }
+        if (c.learningOn()) learned.load();
         List<KnowledgeBase> parts = new ArrayList<>();
         Path file = folder.resolve(c.file());
         if (!Files.exists(file)) copySample(file);
@@ -83,6 +108,10 @@ public final class ServerKnowledge {
         KnowledgeBase taught = parseFile(folder.resolve(Config.TAUGHT_FILE), Config.TAUGHT_FILE);
         parts.add(taught);
         fileEntries += taught.size();
+        adminBase = KnowledgeBase.of(List.copyOf(parts));
+        KnowledgeBase approved = learnedBase(c);
+        learnedEntries = approved.size();
+        parts.add(approved);
         KnowledgeBase self = KnowledgeBase.empty();
         if (c.selfKnowledge()) {
             self = KnowledgeBase.of(List.of(
@@ -92,6 +121,58 @@ public final class ServerKnowledge {
         }
         selfEntries = self.size();
         base = KnowledgeBase.of(parts);
+    }
+
+    /** The approved learned facts as one entry each (learning on), otherwise nothing. */
+    private KnowledgeBase learnedBase(Config c) {
+        if (!c.learningOn()) return KnowledgeBase.empty();
+        StringBuilder text = new StringBuilder();
+        for (LearnedFacts.Fact fact : learned.list(LearnedFacts.Status.APPROVED)) text.append(fact.text()).append("\n\n");
+        return KnowledgeBase.parse(text.toString(), LearnedFacts.FILE, log);
+    }
+
+    /** Rebuilds the search index after a learned fact was approved, disabled, edited... (no file is re-read). Blocking. */
+    public synchronized void refreshLearned() {
+        Settings s = lastSettings;
+        if (s == null || !s.features().knowledge().enabled()) return;
+        List<KnowledgeBase> parts = new ArrayList<>();
+        parts.add(adminBase);
+        KnowledgeBase approved = learnedBase(s.features().knowledge());
+        learnedEntries = approved.size();
+        parts.add(approved);
+        if (s.features().knowledge().selfKnowledge()) {
+            parts.add(KnowledgeBase.parse(resource("/self-knowledge.txt"), "self-knowledge", log));
+            parts.add(KnowledgeBase.parse(SelfKnowledge.status(s), "self-knowledge", log));
+        }
+        base = KnowledgeBase.of(parts);
+    }
+
+    /** The learned facts (proposals, review state). Usable only while learning is on; see {@link Config#learningOn}. */
+    public LearnedFacts learned() {
+        return learned;
+    }
+
+    public int learnedEntries() {
+        return learnedEntries;
+    }
+
+    /** The admin's entries (knowledge.txt, taught) that fit the text, as "title: text" lines. Never blocks. */
+    public List<String> adminRelated(String query, Config config) {
+        List<String> out = new ArrayList<>();
+        for (KnowledgeBase.Entry e : adminBase.retrieve(query, config.maxEntries(), config.maxChars())) {
+            out.add(e.title().isEmpty() ? e.text() : e.title() + ": " + e.text());
+        }
+        return out;
+    }
+
+    /** True when knowledge.txt or the taught facts already say this (learning should not propose it). */
+    public boolean knownByAdmin(String text) {
+        for (KnowledgeBase.Entry e : adminBase.entries()) {
+            if (LearnedFacts.same(e.text(), text) || !e.title().isEmpty() && LearnedFacts.same(e.title() + " " + e.text(), text)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private KnowledgeBase parseFile(Path file, String name) {

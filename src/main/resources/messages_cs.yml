@@ -151,6 +151,73 @@ knowledge:
   list-empty: '<prefix> <gray>Zatím nic nebylo naučeno příkazem /aifriend teach.'
   forgot: '<prefix> <green>Zapomenuto: <white><text>'
   forget-missing: '<prefix> <yellow>Naučený fakt s tímto číslem neexistuje.'
+  status-learned: '<gray>  Naučeno z chatu: <white><approved></white> schváleno, <yellow><pending></yellow> čeká na schválení, <white><candidates></white> kandidátů, <white><rejected></white> zamítnuto · <click:run_command:''/aifriend learned''><aqua>/aifriend learned</aqua></click>'
+  status-learning-off: '<gray>  Učení z chatu: vypnuto (knowledge.learning.enabled)'
+
+# Fakty o serveru, které se bot naučil z chatu (knowledge.learning); admini je schvalují příkazem /aifriend learned.
+learned:
+  disabled: '<prefix> <yellow>Učení z chatu je vypnuté (knowledge.enabled a knowledge.learning.enabled v config.yml).'
+  new: '<prefix> <gold>Bot se něco naučil (#<id>, slyšel <mentions>×): <white><text></white> <click:run_command:''/aifriend learned''><aqua>[zkontrolovat]</aqua></click>'
+  pending-on-join: '<prefix> <gold><count></gold> <yellow>naučených faktů z chatu čeká na vaše schválení. <click:run_command:''/aifriend learned''><aqua>[otevřít]</aqua></click>'
+  missing: '<prefix> <yellow>Naučený fakt s tímto číslem neexistuje.'
+  edit-invalid: '<prefix> <red>Fakt musí mít <min> až <max> znaků.'
+  done:
+    approve: '<prefix> <green>Schváleno #<id>, bot to teď používá: <white><text>'
+    disable: '<prefix> <gray>Vypnuto #<id> (nepoužívá se, znovu se nenavrhne): <white><text>'
+    reject: '<prefix> <red>Zamítnuto #<id>, už se to nikdy nenaučí: <white><text>'
+    delete: '<prefix> <gray>Smazáno #<id> (může se naučit znovu): <white><text>'
+    edit: '<prefix> <green>Upraveno #<id>: <white><text>'
+  status:
+    pending: 'Čeká na schválení'
+    approved: 'Schválené'
+    disabled: 'Vypnuté'
+    rejected: 'Zamítnuté'
+    candidate: 'Kandidáti'
+  list-header: '<prefix> <gold><status> (<count>)'
+  list-line: '<gray>  #<id> <white><text></white> <dark_gray>(<mentions>×, <players>)</dark_gray> <actions>'
+  list-more: '<gray>  ... a dalších <count> (viz GUI: /aifriend learned)'
+  list-empty: '<prefix> <gray>Nic tu není: <status>.'
+  list-tabs: '<gray>  Další seznamy: /aifriend learned list pending|approved|disabled|rejected|candidate'
+  button:
+    approve: '<green>[✔]'
+    disable: '<gray>[⏸]'
+    reject: '<red>[✘]'
+    delete: '<dark_red>[🗑]'
+  button-hover:
+    approve: '<green>Schválit: bot fakt použije v odpovědích'
+    disable: '<gray>Vypnout: nepoužívá se a znovu se nenavrhne (schválit jde později)'
+    reject: '<red>Zamítnout: už se nikdy nenaučí (ani nic podobného)'
+    delete: '<dark_red>Úplně smazat: později se může naučit znovu'
+  gui:
+    title: '<dark_gray>Naučeno: <status> (<page>/<pages>)'
+    fact-name: '<yellow>#<id>'
+    text-line: '<white><text>'
+    mentions: '<gray>Slyšeno <aqua><mentions>×</aqua> · od <white><players>'
+    seen: '<gray>Poprvé <white><first></white> · naposledy <white><last>'
+    decided: '<gray>Rozhodl <white><by></white> <white><at>'
+    hint-approve: '<green>Levé kliknutí: schválit'
+    hint-reject: '<red>Pravé kliknutí: zamítnout (už nikdy)'
+    hint-disable: '<gray>Shift + levé: vypnout'
+    hint-delete: '<dark_red>Shift + pravé: smazat'
+    hint-edit: '<dark_gray>Úprava textu: /aifriend learned edit <id> <text>'
+    tab: '<gold><status> <gray>(<count>)'
+    tab-lore:
+      pending: ['<gray>Fakty slyšené dost často,', '<gray>čekají na vaše rozhodnutí.']
+      approved: ['<gray>Bot je používá v odpovědích.']
+      disabled: ['<gray>Uložené, ale nepoužívají se', '<gray>a znovu se nenavrhnou.']
+      rejected: ['<gray>Už se nikdy nenaučí,', '<gray>ani nic podobného.']
+      candidate: ['<gray>Slyšeno méněkrát než min-mentions.', '<gray>Rozhodnout můžete už teď.']
+    prev: '<yellow>« Předchozí stránka'
+    next: '<yellow>Další stránka »'
+    empty: '<gray>Nic tu není'
+    help-name: '<gold>Jak to funguje'
+    help:
+      - '<gray>Bot si z chatu bere obecné fakty'
+      - '<gray>o serveru. V odpovědích používá'
+      - '<gray>jen ty schválené.'
+      - ''
+      - '<green>Levé</green> <gray>schválit · <red>Pravé</red> <gray>zamítnout'
+      - '<gray>Shift+levé vypnout · <dark_red>Shift+pravé</dark_red> <gray>smazat'
 
 # Přátelská soukromá upozornění dohledu nad chatem (hráči se jinak nic nestane).
 supervision:

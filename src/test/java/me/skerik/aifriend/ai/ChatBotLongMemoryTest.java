@@ -27,6 +27,8 @@ import me.skerik.aifriend.ai.provider.ProviderResult;
 import me.skerik.aifriend.chat.OptOutStore;
 import me.skerik.aifriend.chat.RateLimiter;
 import me.skerik.aifriend.config.Settings;
+import me.skerik.aifriend.knowledge.LearnedFacts;
+import me.skerik.aifriend.knowledge.ServerKnowledge;
 import me.skerik.aifriend.longmemory.Embedder;
 import me.skerik.aifriend.longmemory.LongTermMemory;
 import me.skerik.aifriend.storage.Database;
@@ -101,6 +103,7 @@ class ChatBotLongMemoryTest {
     private final List<ProviderRequest> answers = new ArrayList<>();
     private final List<ProviderRequest> extractions = new ArrayList<>();
     private final List<String> said = new ArrayList<>();
+    private final List<String> told = new ArrayList<>();
     private boolean provider2Fails;
     private String answerText = SAY;
     private Extraction extraction = r -> "{\"notes\":[]}";
@@ -156,6 +159,7 @@ class ChatBotLongMemoryTest {
 
                     @Override
                     public void tellPermission(String permission, String key, Map<String, String> placeholders) {
+                        told.add(permission + " " + key + " " + placeholders.get("text"));
                     }
                 },
                 () -> new ChatBot.WorldView("world", 1000), () -> 2, clock::get, optOut, s);
@@ -431,6 +435,84 @@ class ChatBotLongMemoryTest {
         exchange("Steve", "forget everything about me");
         assertTrue(stored("Steve").isEmpty());
         assertTrue(system(extractions.getFirst()).contains("never store that as a note"));
+    }
+
+    // ---- learning server facts ----
+
+    private static final String CHESTS = "Klíče a truhly se otevírají příkazem /truhly";
+    private static final LearnedFacts.Config LEARN = new LearnedFacts.Config(true, 1, 2, false, 30, true);
+
+    private ServerKnowledge learningBot(boolean withMemory) {
+        Settings s = TestSettings.defaults()
+                .knowledge(new ServerKnowledge.Config(true, "knowledge.txt", 3, 1200, false, LEARN)).build();
+        LongTermMemory.Config mem = withMemory ? config(1)
+                : new LongTermMemory.Config(false, 6, 20, 0, 5, true, new LongTermMemory.Embeddings("none", "", ""));
+        bot = newBot(TestSettings.defaults().knowledge(s.features().knowledge()), mem, withMemory);
+        ServerKnowledge k = new ServerKnowledge(tmp, log, clock::get);
+        k.load(s);
+        bot.setKnowledge(k);
+        return k;
+    }
+
+    private static String factsJson(String player, String fact) {
+        return "{\"server_facts\":[{\"fact\":\"" + fact + "\",\"player\":\"" + player + "\"}]}";
+    }
+
+    @Test
+    void learningWorksWithoutLongTermMemoryAndAsksAdminsAfterMinMentions() {
+        ServerKnowledge k = learningBot(false);
+        extraction = r -> factsJson("Steve", CHESTS);
+        exchange("Steve", "klice a truhly jsou na /truhly");
+        assertEquals(1, extractions.size());
+        String sys = system(extractions.getFirst());
+        assertTrue(sys.contains("server_facts") && !sys.contains("\"notes\""), sys);
+        assertEquals(1, k.learned().count(LearnedFacts.Status.CANDIDATE));
+        assertTrue(told.isEmpty(), "a candidate is not announced");
+        assertTrue(stored("Steve").isEmpty(), "no notes without long-term memory");
+
+        // second round: the model sees the candidate with its id and names it
+        int id = k.learned().list(LearnedFacts.Status.CANDIDATE).getFirst().id();
+        extraction = r -> "{\"server_facts\":[{\"id\":" + id + ",\"player\":\"Alex\"}]}";
+        exchange("Alex", "jo truhly otevres na /truhly");
+        assertTrue(data(user(extractions.get(1))).stream().anyMatch(o -> o.has("known_fact") && o.get("id").getAsInt() == id));
+        assertEquals(1, k.learned().count(LearnedFacts.Status.PENDING));
+        assertEquals(List.of("aifriend.teach learned.new " + CHESTS), told);
+
+        // not used in answers before an admin approves it
+        exchange("Bob", "kde otevru truhly?");
+        assertTrue(data(user(answers.getLast())).stream().noneMatch(o -> o.has("knowledge")));
+        k.learned().decide(id, LearnedFacts.Action.APPROVE, "Admin");
+        k.refreshLearned();
+        exchange("Bob", "kde otevru truhly?");
+        assertTrue(data(user(answers.getLast())).stream()
+                .anyMatch(o -> o.has("knowledge") && o.get("knowledge").getAsString().equals(CHESTS)));
+    }
+
+    @Test
+    void notesAndFactsComeFromTheSameRequest() {
+        ServerKnowledge k = learningBot(true);
+        extraction = r -> "{\"notes\":[{\"player\":\"Steve\",\"note\":\"Builds a castle\"}],\"forget\":[],"
+                + "\"server_facts\":[{\"fact\":\"" + CHESTS + "\",\"player\":\"Steve\"}]}";
+        exchange("Steve", "I build a castle; truhly jsou na /truhly");
+        assertEquals(1, extractions.size());
+        assertEquals(List.of("Builds a castle"), stored("Steve"));
+        assertEquals(1, k.learned().count(LearnedFacts.Status.CANDIDATE));
+        assertTrue(system(extractions.getFirst()).contains("\"notes\"") && system(extractions.getFirst()).contains("server_facts"));
+    }
+
+    @Test
+    void factsFromPlayersOutsideTheLogAreIgnored() {
+        ServerKnowledge k = learningBot(false);
+        extraction = r -> factsJson("Herobrine", CHESTS);
+        exchange("Steve", "hello");
+        assertEquals(0, k.learned().counts().values().stream().mapToInt(Integer::intValue).sum());
+    }
+
+    @Test
+    void learningOffSendsNoFactRules() {
+        start(1);
+        exchange("Steve", "hello");
+        assertFalse(system(extractions.getFirst()).contains("server_facts"));
     }
 
     // ---- retrieval ----

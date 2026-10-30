@@ -25,7 +25,7 @@
 - **Vaše volba AI.** OpenAI (výchozí), Anthropic Claude, lokální server Ollama nebo libovolný endpoint kompatibilní s OpenAI, s řetězem záložních poskytovatelů a volitelnou cache odpovědí.
 - **Chytrý chat, vše volitelné a ve výchozím stavu vypnuté.** Persony, paměť konverzace, limity, odhad nákladů, filtr odpovědí, přímé dotazy (`/ai`, `@Jméno`), vypnutí bota pro jednotlivého hráče a reakce na události ve hře.
 - **Dlouhodobá paměť** (volitelná, vypnutá). Bot si pamatuje, co mu hráči o sobě řekli, v SQLite nebo MariaDB; hráči své poznámky vidí a mažou.
-- **Znalosti o serveru.** Do `knowledge.txt` napíšete pravidla, IP, obchody a události (nebo přidáte fakty ve hře přes `/aifriend teach`) a bot o vašem serveru odpovídá; zná také sám sebe: co vidí, co ukládá a co umí. Ve výchozím stavu vypnuto.
+- **Znalosti o serveru.** Do `knowledge.txt` napíšete pravidla, IP, obchody a události (nebo přidáte fakty ve hře přes `/aifriend teach`) a bot o vašem serveru odpovídá; zná také sám sebe: co vidí, co ukládá a co umí. Volitelně se **obecné fakty o serveru učí z chatu** a admin je nejdřív schválí v GUI. Ve výchozím stavu vypnuto.
 - **Ladí s chatem.** Bot neodpovídá pokaždé: mlčí, když si hráči povídají mezi sebou, a zapojí se, když se na něj někdo obrátí. Přebírá tón, slang a atmosféru posledních zpráv, nezní jako návod a neříká hráčům pořád, kde jsou.
 - **Integrace.** Veřejné API (`AiFriendResponseEvent`, `AiFriendApi`) a placeholdery PlaceholderAPI, např. `%aifriend_mood%`.
 - **Podle vás.** Jméno bota, jazyk odpovědí a volný text `personalization` (web, vtipy, pravidla serveru, ...).
@@ -201,6 +201,16 @@ Jak to funguje: slova z posledního chatu se v paměti porovnají se záznamy (p
 
 **Soukromí:** záznamy, které se k dotazu hodí, se posílají vašemu AI poskytovateli spolu s řádky chatu. Do souboru nedávejte tajné věci (hesla, soukromé adresy).
 
+### Učení z chatu
+
+Ve výchozím stavu vypnuto (`knowledge.learning.enabled`, vyžaduje `knowledge.enabled`). Bot si z chatu bere **obecné fakty o vašem serveru**, které hráči říkají, třeba "klíče a truhly se otevírají na /truhly" nebo "obchody jsou na /warp shop", a nabízí je adminům. **Nic se v odpovědích nepoužije, dokud to admin neschválí.**
+
+- Využívá stejný dodatečný požadavek jako [dlouhodobá paměť](#dlouhodobá-paměť) (každých `extract-every-exchanges` zodpovězených výměn; se zapnutou dlouhodobou pamětí platí její hodnota a poznámky i fakty přijdou z jednoho požadavku). Model dostane řádky chatu, už sesbírané fakty, které k nim sedí (s id, aby poznal opakovanou zmínku), a záznamy z vašeho `knowledge.txt`/naučených faktů, které sedí (aby nenavrhoval, co už jste napsali). Fakty o jednotlivých hráčích zůstávají [poznámkami](#dlouhodobá-paměť); názory, vtipy, otázky a příkazy typu "nauč se to!" se nepočítají.
+- Nový fakt je **kandidát**, dokud nezazní v `min-mentions` (výchozí 2) samostatných kolech; pak **čeká na schválení** a admini s `aifriend.teach` dostanou zprávu do chatu (i při připojení, dokud něco čeká; `notify-admins`). Podobné formulace se počítají jako tentýž fakt.
+- **`/aifriend learned`** otevře GUI (hráč) nebo vypíše čekající (konzole). Záložky: čeká, schválené, vypnuté, zamítnuté, kandidáti. **Levé kliknutí schválí** (bot to od teď používá), **pravé zamítne** (už se nikdy nenaučí, ani nic podobného), **shift + levé vypne** (zůstane uložené, nepoužívá se, znovu se nenavrhne; schválit jde později), **shift + pravé smaže** (zmizí, může se naučit znovu). Každé kliknutí v GUI se ruší, nic se nedá vytáhnout. Totéž jde příkazy s klikacími tlačítky: `/aifriend learned list [pending|approved|disabled|rejected|candidate]`, `approve|disable|reject|delete <id>` a `edit <id> <text>` pro opravu znění před schválením.
+- Schválené fakty se prohledávají jako ostatní znalosti (`max-entries-per-request`, `max-chars-per-request`) a když sedí k chatu, jdou do požadavku jako řádky `{"knowledge":...}`.
+- Uloženo v `plugins/ai-friend/knowledge-learned.json` (text, stav, kolikrát a od kterých posledních pěti jmen hráčů zaznělo, data, kdo rozhodl). Kandidáti, které nikdo nezmínil `forget-candidates-after-days` (30) dní, se zahodí. `auto-approve: true` schvalování přeskočí; nedoporučeno, hráči by bota mohli naučit nesmysly nebo škodlivé "fakty".
+
 ## Vnímání světa a osobnost
 
 Novinka ve verzi 2.2.0, vše je ve výchozím stavu **vypnuté** a zapíná se zvlášť (`config.yml`, `/aifriend reload` změny použije).
@@ -275,6 +285,7 @@ AiFriendApi api = Bukkit.getServicesManager().load(AiFriendApi.class); // null, 
 | `/aifriend cost` | Součty tokenů a odhad nákladů (vyžaduje `cost.enabled`) | `aifriend.cost` |
 | `/aifriend teach <fakt>` | Přidá fakt do znalostí bota (vyžaduje `knowledge.enabled`) | `aifriend.teach` |
 | `/aifriend knowledge [list\|forget <číslo>]` | Počty, výpis naučených faktů, smazání jednoho | `aifriend.teach` |
+| `/aifriend learned` | GUI ke schvalování faktů naučených z chatu (konzole: výpis); také `list [stav]`, `approve\|disable\|reject\|delete <id>`, `edit <id> <text>` | `aifriend.teach` |
 
 ## Oprávnění
 
@@ -291,7 +302,7 @@ AiFriendApi api = Bukkit.getServicesManager().load(AiFriendApi.class); // null, 
 | `aifriend.bypass-limits` | op | Nevztahuje se na něj cooldown ani denní limity |
 | `aifriend.nickname` | všichni | `/aifriend nickname` |
 | `aifriend.bypass-supervision` | op | Žádná přátelská upozornění na caps lock, spam a jazyk |
-| `aifriend.teach` | op | `/aifriend teach`, `/aifriend knowledge` |
+| `aifriend.teach` | op | `/aifriend teach`, `/aifriend knowledge`, `/aifriend learned` a zprávy o faktech čekajících na schválení |
 
 ## Konfigurace
 
@@ -430,7 +441,7 @@ Upozornění:
 - S řetězem záložních poskytovatelů jde chat tomu, kdo nakonec odpoví; každý člen řetězu je potenciální příjemce.
 - API klíče jsou jen v `config.yml`, v čistém textu jako každé nastavení pluginu. Soubor držte v soukromí. Klíče jsou maskované v `/aifriend status` a odstraněné z chybových hlášek i logu; posílají se jen v hlavičkách požadavku svému poskytovateli. Přesměrování se nesledují.
 - Umlčení hráči (`opt-out`) se nikdy neukládají ani neposílají. Seznam (`muted-players.yml`) obsahuje UUID hráčů na vašem serveru.
-- **Znalosti o serveru** (ve výchozím stavu vypnuté). Záznamy z `knowledge.txt`, z naučených faktů a z vestavěného popisu bota, které se hodí k slovům hráčů (nejvýše `max-entries-per-request`), se posílají vašemu AI poskytovateli spolu s řádky chatu. Čtou se ze souborů ve složce pluginu; nic o hráčích se neukládá.
+- **Znalosti o serveru** (ve výchozím stavu vypnuté). Záznamy z `knowledge.txt`, z naučených faktů a z vestavěného popisu bota, které se hodí k slovům hráčů (nejvýše `max-entries-per-request`), se posílají vašemu AI poskytovateli spolu s řádky chatu. Čtou se ze souborů ve složce pluginu; nic o hráčích se neukládá. *Učení z chatu* (`knowledge.learning`, ve výchozím stavu vypnuté) využívá požadavek na extrakci (poslední řádky chatu se jmény hráčů jdou vašemu AI poskytovateli, spolu se sesbíranými fakty a vašimi záznamy, které sedí) a do `knowledge-learned.json` ukládá u každého faktu posledních pět jmen hráčů, kteří ho zmínili, aby admin viděl, odkud pochází; smazání faktu je odstraní.
 - **Vnímání světa** (vše ve výchozím stavu vypnuté). *Kontext serveru* posílá s každým požadavkem denní dobu, počasí, počet hráčů online a u hráčů, kteří psali, jejich svět, biom a nepřátelské moby poblíž (nikdy souřadnice) vašemu AI poskytovateli. *Vztahy* ukládají ve vaší databázi UUID hráče, poslední jméno, počet zodpovězených výměn, první a poslední čas a volitelnou přezdívku, kterou hráč napsal; `/aifriend forget` je smaže, ztlumení bota je smaže a zastaví sběr, a přezdívka s úrovní jdou poskytovateli spolu s řádky chatu daného hráče. *Nálada* a *nuda* drží v paměti jen počítadla. *Dohled nad chatem* čte veřejné řádky jen v paměti (nevolá AI, nic neukládá a hráče, kteří bota ztlumili, nesleduje).
 - Paměť konverzace, limity, součty nákladů a cache jsou jen v paměti a s restartem zmizí (výjimkou je dlouhodobá paměť, viz níže).
 - **Dlouhodobá paměť** (ve výchozím stavu vypnutá) je jediná funkce, která ukládá data o hráčích. Ve vaší vlastní databázi (`storage`) ukládá: UUID hráče, jméno hráče, krátkou poznámku (max 120 znaků, kterou z toho, co hráč řekl sám o sobě, napsal model), kdy vznikla a kdy byla naposledy použita, a případně embedding vektor poznámky. Nic dalšího z chatu se neukládá. **K nalezení poznámek se každých `extract-every-exchanges` odpovědí posílá dodatečný požadavek s posledními řádky chatu (se jmény hráčů) vašemu AI poskytovateli**, a s embeddingy jdou poznámky a text chatu i embedding službě. Řekněte to hráčům. Model má pokyn nic citlivého neukládat a poznámky podobné kontaktním údajům plugin zahodí, ale model se může splést: v případě pochybností zkontrolujte `/aifriend memory <hráč>`. Hráči poznámky vidí a mažou přes `/aifriend memory` a `/aifriend forget` nebo tím, že bota v chatu požádají, ať něco zapomene (tento požadavek na extrakci posílá poskytovateli i uložené poznámky žádajícího hráče a posledních pár zpráv bota), admini přes `forget <hráč>` a `forget-all`, ztlumení zastaví sběr a (ve výchozím stavu) poznámky smaže a `retention-days` odstraňuje staré. S MariaDB leží poznámky na vašem databázovém serveru a sdílí je všechny servery, které ji používají.

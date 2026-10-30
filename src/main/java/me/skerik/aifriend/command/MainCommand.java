@@ -116,6 +116,7 @@ public final class MainCommand {
                                 .then(Commands.argument("number", IntegerArgumentType.integer(1))
                                         .executes(c -> withContext(c, ctx -> knowledgeForget(ctx, c.getSource().getSender(),
                                                 IntegerArgumentType.getInteger(c, "number")))))))
+                .then(new LearnedCommands(plugin).node())
                 .then(Commands.literal("limits")
                         .requires(src -> src.getSender().hasPermission("aifriend.ask"))
                         .executes(c -> player(c, this::limits)))
@@ -393,10 +394,20 @@ public final class MainCommand {
         if (k == null) return;
         ctx.scheduler.runAsync(() -> {
             int taught = k.taught().size();
-            List<Component> lines = ctx.messages().list("knowledge.status",
+            List<Component> lines = new ArrayList<>(ctx.messages().list("knowledge.status",
                     Messages.text("file", Integer.toString(k.fileEntries())),
                     Messages.text("self", Integer.toString(k.selfEntries())),
-                    Messages.text("taught", Integer.toString(taught)));
+                    Messages.text("taught", Integer.toString(taught))));
+            if (ctx.settings().features().knowledge().learningOn()) {
+                var counts = k.learned().counts();
+                lines.add(ctx.messages().get("knowledge.status-learned",
+                        Messages.text("approved", Integer.toString(counts.get(me.skerik.aifriend.knowledge.LearnedFacts.Status.APPROVED))),
+                        Messages.text("pending", Integer.toString(counts.get(me.skerik.aifriend.knowledge.LearnedFacts.Status.PENDING))),
+                        Messages.text("candidates", Integer.toString(counts.get(me.skerik.aifriend.knowledge.LearnedFacts.Status.CANDIDATE))),
+                        Messages.text("rejected", Integer.toString(counts.get(me.skerik.aifriend.knowledge.LearnedFacts.Status.REJECTED)))));
+            } else {
+                lines.add(ctx.messages().get("knowledge.status-learning-off"));
+            }
             ctx.scheduler.runGlobal(() -> lines.forEach(sender::sendMessage));
         });
     }
