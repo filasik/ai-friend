@@ -1,0 +1,1 @@
+AI Friend is MIT licensed · [GitHub](https://github.com/filasik/ai-friend) · [Modrinth](https://modrinth.com/plugin/aifriend) · [Hangar](https://hangar.papermc.io/filasik/AIFriend-Personal_Assistant) · [Privacy and Data](Privacy-and-Data)
